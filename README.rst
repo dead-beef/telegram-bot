@@ -16,9 +16,9 @@ Installation
 
     git clone https://github.com/dead-beef/telegram-bot
     cd telegram-bot
-	pyvenv env
-	pyvenv --system-site-packages env
-	source env/bin/activate
+    pyvenv env
+    pyvenv --system-site-packages env
+    source env/bin/activate
     pip install -e .[dev]
 
 Testing
@@ -35,8 +35,8 @@ Usage
 
     > python -m bot -h
     usage: __main__.py [-h] [-P POLL] [-p PROXY] [-d DATA_DIR] [-m FILE]
-	                   [-l {critical,error,warning,info,debug}]
-					   TOKEN_OR_FILE
+                       [-l {critical,error,warning,info,debug}]
+                       TOKEN_OR_FILE
 
     positional arguments:
       TOKEN_OR_FILE         bot token or token file
@@ -50,10 +50,10 @@ Usage
                             bot data directory (default: ~/.bot)
       -m FILE, --message-log FILE
                             message log file
-							("-" - stdout, "none" - disable message logging)
-							(default: <bot directory>/messages.log)
+                            ("-" - stdout, "none" - disable message logging)
+                            (default: <bot directory>/messages.log)
       -l {critical,error,warning,info,debug},
-	  --log-level {critical,error,warning,info,debug}
+      --log-level {critical,error,warning,info,debug}
                             log level (default: info)
 
 Licenses
