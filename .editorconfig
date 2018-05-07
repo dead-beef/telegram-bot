@@ -9,3 +9,6 @@ indent_size = 4
 
 [*.py]
 indent_style = space
+
+[*.rst]
+indent_style = space
