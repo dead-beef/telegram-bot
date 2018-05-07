@@ -1,0 +1,11 @@
+/env
+/build
+/dist
+/token
+/*.egg-info
+/.bot/*
+!/.bot/settings
+*.pyc
+__pycache__
+.pytest_cache
+.coverage
