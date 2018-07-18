@@ -1,6 +1,8 @@
 import re
 import logging
 
+from base64 import b64encode, b64decode, binascii
+
 from telegram.ext import (
     CommandHandler,
     MessageHandler,
@@ -22,6 +24,8 @@ class BotCommands:
         '  /help - bot help\n'
         '  /start - generate text\n'
         '  /echo <text> - print text\n'
+        '  /b64 <text> - encode base64\n'
+        '  /b64d <base64> - decode base64\n'
         '  /settings - print chat settings\n'
         '  /setcontext - set generator context\n'
         '  /delprivate - delete private context\n'
@@ -125,6 +129,33 @@ class BotCommands:
             update.message.reply_text('usage: /echo <text>', quote=True)
             return
         bot.send_message(chat_id=update.message.chat_id, text=msg)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_b64(self, _, update):
+        msg = strip_command(update.message.text)
+        if not msg:
+            update.message.reply_text('usage: /b64 <text>', quote=True)
+            return
+        try:
+            msg = b64encode(msg.encode('utf-8')).decode('ascii')
+        except (UnicodeEncodeError, UnicodeDecodeError, binascii.Error) as ex:
+            msg = repr(ex)
+        update.message.reply_text(msg, quote=True)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_b64d(self, bot, update):
+        msg = strip_command(update.message.text)
+        if not msg:
+            update.message.reply_text('usage: /b64d <base64>', quote=True)
+            return
+        try:
+            msg = b64decode(msg.encode('utf-8'), validate=True).decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError, binascii.Error) as ex:
+            update.message.reply_text(repr(ex), quote=True)
+        else:
+            bot.send_message(chat_id=update.message.chat_id, text=msg)
 
     @update_handler
     @command(C.REPLY_TEXT)
