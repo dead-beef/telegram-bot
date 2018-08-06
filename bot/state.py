@@ -3,9 +3,11 @@ import re
 import random
 import sqlite3
 import logging
-from random import randint
-
-from .util import strip_command
+from .util import (
+    strip_command,
+    get_message_text,
+    reply_text
+)
 from .context_cache import ContextCache
 from .error import CommandError
 
@@ -277,11 +279,9 @@ class BotState:
     def _need_reply(self, message):
         reply = False
         quote = False
+        text = get_message_text(message)
 
-        trigger, reply_to_bots = self.get_chat(
-            message.chat,
-            'trigger,reply_to_bots'
-        )
+        trigger = self.get_chat(message.chat, 'trigger')
 
         if message.chat.type == message.chat.PRIVATE:
             self.logger.info('private chat: reply=True')
@@ -291,24 +291,23 @@ class BotState:
             self.logger.info('reply to self: reply=True')
             quote = True
             reply = True
-        elif message.text and self.username in message.text:
-            self.logger.info('username in message text: reply=True')
-            quote = True
-            reply = True
-        elif (trigger is not None
-              and message.text is not None
-              and re.search(trigger, message.text, re.I)):
-            self.logger.info('trigger: reply=True')
-            quote = True
-            reply = True
+        elif text:
+            if self.username in text:
+                self.logger.info('username in message text: reply=True')
+                quote = True
+                reply = True
+            elif re.search(trigger, text, re.I):
+                self.logger.info('trigger: reply=True')
+                quote = True
+                reply = True
 
-        if reply:
-            if message.from_user.is_bot:
-                rnd = randint(0, 99)
-                self.logger.info('reply to bot: %d / %d', rnd, reply_to_bots)
-                if rnd >= reply_to_bots:
-                    self.logger.info('not replying to bot')
-                    reply = False
+        #if reply:
+        #    if message.from_user.is_bot:
+        #        rnd = randint(0, 99)
+        #        self.logger.info('reply to bot: %d / %d', rnd, reply_to_bots)
+        #        if rnd >= reply_to_bots:
+        #            self.logger.info('not replying to bot')
+        #            reply = False
 
         return reply, quote
 

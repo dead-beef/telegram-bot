@@ -93,6 +93,9 @@ def get_chat_title(chat):
         str(chat.last_name)
     )
 
+def get_message_text(message):
+    return message.text or message.caption
+
 
 def reply_text(update, msg, quote=False):
     if not msg:
