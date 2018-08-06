@@ -1,6 +1,7 @@
 import re
 import enum
 import logging
+import subprocess
 import unicodedata
 from functools import wraps
 
@@ -13,6 +14,8 @@ from .promise import Promise, PromiseType as PT
 def re_list_compile(re_list):
     return [(re.compile(expr), repl) for expr, repl in re_list]
 
+
+LOGGER = logging.getLogger(__name__)
 
 RE_COMMAND = re.compile(r'^/[^\s]+\s*')
 RE_COMMAND_USERNAME = re.compile(r'^/[^@\s]+@([^\s]+)\s*')
@@ -127,6 +130,11 @@ def reply_text(update, msg, quote=False):
         quote = True
         if isinstance(msg, BotError):
             msg = str(msg)
+        elif isinstance(msg, subprocess.CalledProcessError):
+            LOGGER.error('%s\n\n%r', msg.output.decode('utf-8'), msg)
+            msg = 'subprocess exited with status %d' % msg.returncode
+        elif isinstance(msg, subprocess.TimeoutExpired):
+            msg = 'subprocess timeout expired'
         else:
             msg = repr(msg)
 

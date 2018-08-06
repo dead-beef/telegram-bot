@@ -4,7 +4,12 @@ import random
 import sqlite3
 import logging
 import tempfile
+import subprocess
 from collections import defaultdict
+from threading import Lock
+
+from telegram import ChatAction, TelegramError
+from telegram.ext import Dispatcher
 
 from .util import (
     strip_command,
@@ -56,7 +61,15 @@ class BotState:
         'CREATE INDEX IF NOT EXISTS `sticker_set_name` ON `sticker_set` (`name`)'
     ]
 
-    def __init__(self, id_, username, root=None):
+    ASYNC_MAX_DEFAULT = 4
+    PROCESS_TIMEOUT_DEFAULT = 30
+
+    def __init__(self,
+                 id_,
+                 username,
+                 root=None,
+                 async_max=ASYNC_MAX_DEFAULT,
+                 process_timeout=PROCESS_TIMEOUT_DEFAULT):
         if root is None:
             root = os.path.expanduser('~/.bot')
 
@@ -69,6 +82,11 @@ class BotState:
         self.default_file_dir = os.path.join(self.root, 'document')
         self.file_dir = defaultdict(lambda: self.default_file_dir)
         self.tmp_dir = tempfile.mkdtemp(prefix=__name__)
+
+        self.async_lock = Lock()
+        self.async_running = 0
+        self.async_max = async_max
+        self.process_timeout = process_timeout
 
         os.makedirs(self.default_file_dir, exist_ok=True)
         for type_ in FILE_TYPES:
@@ -85,6 +103,37 @@ class BotState:
     def save(self):
         self.logger.info('saving bot state')
         self.db.commit()
+
+    def run_async(self, func, *args, **kwargs):
+        def _run_async():
+            try:
+                func(*args, **kwargs)
+            finally:
+                with self.async_lock:
+                    self.async_running -= 1
+                self.logger.info(
+                    'run_async end %s %d',
+                    func.__name__, self.async_running
+                )
+
+        with self.async_lock:
+            if self.async_running >= self.async_max:
+                msg = 'run_async: %s: queue full' % func.__name__
+                self.logger.warning(msg)
+                raise CommandError(msg)
+            self.async_running += 1
+
+        try:
+            self.logger.info(
+                'run_async start %s %d',
+                func.__name__, self.async_running
+            )
+            Dispatcher.get_instance().run_async(_run_async)
+        except Exception as ex:
+            self.logger.error('run_async error %r', ex)
+            with self.async_lock:
+                self.async_running -= 1
+            raise
 
     def get_chat(self, chat, fields='*'):
         query = 'SELECT %s FROM `chat` WHERE id=?' % fields
