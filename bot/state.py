@@ -16,6 +16,7 @@ from .util import (
     get_message_text,
     get_message_filename,
     reply_text,
+    reply_photo,
     FILE_TYPES
 )
 from .context_cache import ContextCache
@@ -428,6 +429,35 @@ class BotState:
             return None
         return res[0]
 
+    def filter_image(self, update, download, settings, quote=False):
+        output = os.path.join(
+            self.tmp_dir,
+            get_message_filename(update.message) + '_filtered.jpg'
+        )
+        self.logger.info('filter %s', output)
+
+        try:
+            update.message.bot.send_chat_action(
+                update.message.chat_id,
+                ChatAction.UPLOAD_PHOTO
+            )
+        except TelegramError as ex:
+            self.logger.error('send_chat_action: %r', ex)
+
+        download.then(
+            lambda fname: subprocess.check_output(
+                (os.path.join(self.root, 'scripts', 'filter'),
+                 '384x384', settings['filter'], fname, output
+                ),
+                stderr=subprocess.STDOUT,
+                timeout=self.process_timeout
+            )
+        ).then(
+            lambda _: reply_photo(update, output, quote)
+        ).catch(
+            lambda err: reply_text(update, err, quote)
+        ).wait()
+
     def on_text(self, update):
         message = update.message
         reply, quote = self._need_reply(message)
@@ -476,6 +506,18 @@ class BotState:
             if res is None:
                 return None
             return res, quote
+        return None
+
+    def on_photo(self, deferred, update):
+        message = update.message
+        reply, quote = self._need_reply(message)
+        settings = self.get_chat_settings(update.message.chat)
+        if not reply:
+            return None
+        self.run_async(
+            self.filter_image,
+            update, deferred.promise, settings, quote
+        )
         return None
 
     def on_status_update(self, type_, update):

@@ -149,6 +149,14 @@ def reply_sticker(update, msg, quote=False):
     update.message.reply_sticker(sticker=msg, quote=quote)
 
 
+def reply_photo(update, img, quote=False):
+    if isinstance(img, str):
+        with open(img, 'rb') as fp:
+            update.message.reply_photo(fp, quote=quote)
+    else:
+        update.message.reply_photo(img, quote=quote)
+
+
 def reply_keyboard(update, msg, options=None):
     if isinstance(msg, tuple) and len(msg) == 2:
         msg, options = msg

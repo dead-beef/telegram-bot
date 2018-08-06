@@ -232,6 +232,7 @@ class Bot:
     def on_photo(self, _, update):
         deferred = Promise.defer()
         self.download(update.message, deferred)
+        return partial(self.state.on_photo, deferred)
 
     @update_handler
     @command(C.REPLY_TEXT)

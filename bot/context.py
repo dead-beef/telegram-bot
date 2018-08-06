@@ -9,7 +9,9 @@ from .namespace import Namespace
 
 
 class Context:
-    PATH_SETTINGS = []
+    PATH_SETTINGS = [
+        'filter'
+    ]
 
     def __init__(self, root, defaults):
         self.root = root

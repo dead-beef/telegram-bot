@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if (( $# != 4 )); then
+	echo "usage: $0 <size> <settings> <input> <output>" >&2
+	exit 1
+fi
+
+IMG_SIZE="$1"
+SETTINGS="$2"
+INPUT="$3"
+OUTPUT="$4"
+TMP="$(mktemp --suffix .png)"
+TMP2="$(mktemp --suffix .png)"
+
+trap 'rm -f "${TMP}" "${TMP2}"' EXIT
+
+convert -thumbnail "$IMG_SIZE" "$INPUT" "$TMP" \
+	&& markovchain image filter -t json -l 0 -s "$SETTINGS" "$TMP" "$TMP2" \
+	&& convert "$TMP2" -quality 90 "jpg:${OUTPUT}"
