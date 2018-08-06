@@ -28,6 +28,9 @@ RE_SANITIZE = RE_SANITIZE_MSG + re_list_compile([
 ])
 
 
+FILE_TYPES = ['video', 'audio', 'document', 'voice', 'photo']
+
+
 class CommandType(enum.IntEnum):
     NONE = 0
     REPLY_TEXT = 1
@@ -93,8 +96,24 @@ def get_chat_title(chat):
         str(chat.last_name)
     )
 
+def get_message_filename(message):
+    return '%s_%s_%s' % (
+        message.chat.id,
+        int(message.date.timestamp()),
+        message.message_id
+    )
+
 def get_message_text(message):
     return message.text or message.caption
+
+def get_file(message):
+    for type_ in FILE_TYPES:
+        data = getattr(message, type_)
+        if data:
+            if type_ == 'photo':
+                data = data[-1]
+            return type_, data.file_id
+    raise ValueError('%r: file not found', message)
 
 
 def reply_text(update, msg, quote=False):

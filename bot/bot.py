@@ -1,11 +1,14 @@
+import os
 import logging
 from queue import Queue
 from threading import Event
+from functools import partial
 
 from telegram.ext import (
     Updater,
     MessageHandler,
-    InlineQueryHandler
+    InlineQueryHandler,
+    run_async
 )
 from telegram.ext.filters import Filters
 
@@ -15,8 +18,9 @@ from .promise import Promise, PromiseType as PT
 from .util import (
     sanitize_log,
     get_chat_title,
-    reply_text,
+    get_message_filename,
     update_handler,
+    get_file,
     command,
     CommandType as C
 )
@@ -47,8 +51,8 @@ class Bot:
             'proxy_url': self.proxy
         })
 
-        me = self.updater.bot.getMe()
-        self.logger.info('getMe: %s', me)
+        me = self.updater.bot.get_me()
+        self.logger.info('get_me: %s', me)
 
         self.state = BotState(me.id, me.username, root)
         self.commands = BotCommands(self)
@@ -73,8 +77,14 @@ class Bot:
             self.on_voice
         ))
         dispatcher.add_handler(MessageHandler(
-            Filters.audio | Filters.document
-            | Filters.photo | Filters.video | Filters.video_note,
+            Filters.photo,
+            self.on_photo
+        ))
+        dispatcher.add_handler(MessageHandler(
+            Filters.audio
+            | Filters.document
+            | Filters.video
+            | Filters.video_note,
             self.on_file
         ))
 
@@ -164,6 +174,23 @@ class Bot:
     def on_error(self, _, update, error):
         self.logger.error('update "%s" caused error "%s"', update, error)
 
+    @run_async
+    def download(self, message, deferred=None):
+        try:
+            ftype, fid = get_file(message)
+            fdir = self.state.file_dir[ftype]
+            fname = os.path.join(fdir, get_message_filename(message))
+            self.logger.info('download %s -> %s', ftype, fname)
+            self.updater.bot.get_file(fid).download(fname)
+            self.logger.info('download complete: %s -> %s', ftype, fname)
+        except BaseException as ex:
+            if deferred is not None:
+                deferred.reject(ex)
+            raise
+        else:
+            if deferred is not None:
+                deferred.resolve(fname)
+
     @update_handler
     def on_inline(self, _, update):
         pass
@@ -196,23 +223,21 @@ class Bot:
                 ptype=PT.MANUAL
             )
             self.queue.put(need_sticker_set)
-            get_sticker_set.wait()
             self.queue.put(learn_sticker_set)
             learn_sticker_set.wait()
         return self.state.on_sticker
 
     @update_handler
-    def on_status_update(self, _, update):
-        pass
-
-    @update_handler
+    @command(C.REPLY_TEXT)
     def on_photo(self, _, update):
-        pass
+        deferred = Promise.defer()
+        self.download(update.message, deferred)
 
     @update_handler
+    @command(C.REPLY_TEXT)
     def on_voice(self, _, update):
-        pass
+        self.download(update.message)
 
     @update_handler
     def on_file(self, _, update):
-        pass
+        self.download(update.message)

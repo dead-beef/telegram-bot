@@ -3,10 +3,15 @@ import re
 import random
 import sqlite3
 import logging
+import tempfile
+from collections import defaultdict
+
 from .util import (
     strip_command,
     get_message_text,
-    reply_text
+    get_message_filename,
+    reply_text,
+    FILE_TYPES
 )
 from .context_cache import ContextCache
 from .error import CommandError
@@ -61,7 +66,15 @@ class BotState:
         self.logger = logging.getLogger('bot.state')
         self.context = ContextCache(os.path.join(self.root, 'data'))
 
-        os.makedirs(self.root, exist_ok=True)
+        self.default_file_dir = os.path.join(self.root, 'document')
+        self.file_dir = defaultdict(lambda: self.default_file_dir)
+        self.tmp_dir = tempfile.mkdtemp(prefix=__name__)
+
+        os.makedirs(self.default_file_dir, exist_ok=True)
+        for type_ in FILE_TYPES:
+            dir_ = os.path.join(self.root, type_)
+            os.makedirs(dir_, exist_ok=True)
+            self.file_dir[type_] = dir_
 
         self.db = sqlite3.connect(os.path.join(self.root, 'bot.db'))
         self.cursor = self.db.cursor()
