@@ -5,6 +5,7 @@
 /*.egg-info
 /.bot/*
 !/.bot/settings
+!/.bot/scripts
 *.pyc
 __pycache__
 .pytest_cache
