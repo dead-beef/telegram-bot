@@ -24,6 +24,7 @@ class BotCommands:
         'commands:\n'
         '  /help - bot help\n'
         '  /start - generate text\n'
+        '  /sticker - send random sticker\n'
         '  /echo <text> - print text\n'
         '  /b64 <text> - encode base64\n'
         '  /b64d <base64> - decode base64\n'
@@ -116,6 +117,11 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def cmd_start(self, *_):
         return self.state.random_text
+
+    @update_handler
+    @command(C.REPLY_STICKER)
+    def cmd_sticker(self, *_):
+        return lambda *_: (self.state.random_sticker(), True)
 
     @update_handler
     @command(C.NONE)
