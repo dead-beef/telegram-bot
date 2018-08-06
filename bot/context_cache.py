@@ -13,6 +13,11 @@ class ContextCache:
         os.makedirs(self.root_private, exist_ok=True)
         os.makedirs(self.root_settings, exist_ok=True)
         self.context = {}
+        self.defaults = Context.load_settings(
+            os.path.join(self.root_settings, 'default.json'),
+            self.root_settings,
+            None
+        )
 
     def __contains__(self, name):
         return name in self.context
@@ -34,7 +39,7 @@ class ContextCache:
             raise ValueError('context exists: %s' % name)
         ret = Context.create(
             os.path.join(self.root_private, name),
-            os.path.join(self.root_settings, 'default.json')
+            os.path.join(self.root_settings, 'markov.json')
         )
         self.context[name] = ret
         return ret
@@ -57,7 +62,7 @@ class ContextCache:
         try:
             return self.context[name]
         except KeyError:
-            ctx = Context(self.get_path(name))
+            ctx = Context(self.get_path(name), self.defaults)
             self.context[name] = ctx
             return ctx
 

@@ -1,0 +1,38 @@
+{
+    "storage": {
+        "state_separator": ""
+    },
+    "markov": {
+        "levels": 2,
+        "imgtype": {
+            "__class__": "Indexed",
+            "palette": [ 8, 4, 8 ],
+            "convert_type": 1,
+            "dither": true
+        },
+        "parser": {
+            "__class__": "LevelParser",
+            "parsers": [
+                {
+                    "__class__": "Parser",
+                    "state_sizes": [ 3 ]
+                },
+                {
+                    "__class__": "Parser",
+                    "state_sizes": [ 8 ]
+                }
+            ]
+        },
+        "scanner": {
+            "__class__": "ImageScanner",
+            "resize": null,
+            "scale": "BICUBIC",
+            "level_scale": [ 32 ],
+            "traversal": [
+                {
+                    "__class__": "Hilbert"
+                }
+            ]
+        }
+    }
+}

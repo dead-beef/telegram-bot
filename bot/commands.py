@@ -1,6 +1,7 @@
 import re
 import logging
 
+from functools import partial
 from base64 import b64encode, b64decode, binascii
 
 from telegram.ext import (
@@ -95,21 +96,21 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def status_update(self, _, update):
         msg = update.message
-        callback = None
+        type_ = None
         if msg.new_chat_members:
             if any(user.id == self.state.id for user in msg.new_chat_members):
-                callback = self.state.on_add_self
+                type_ = 'add_self'
             elif any(user.is_bot for user in msg.new_chat_members):
-                callback = self.state.on_add_bot
+                type_ = 'add_bot'
             else:
-                callback = self.state.on_add_user
+                type_ = 'add_user'
         elif msg.left_chat_member:
             if msg.left_chat_member.is_bot:
                 if msg.left_chat_member.id != self.state.id:
-                    callback = self.state.on_remove_bot
+                    type_ = 'remove_bot'
             else:
-                callback = self.state.on_remove_user
-        return callback
+                type_ = 'remove_user'
+        return partial(self.state.on_status_update, type_)
 
     @update_handler
     @command(C.REPLY_TEXT)

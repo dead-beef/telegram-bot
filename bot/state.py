@@ -1,5 +1,6 @@
 import os
 import re
+import random
 import sqlite3
 import logging
 from random import randint
@@ -90,6 +91,12 @@ class BotState:
         if context is None:
             raise CommandError('generator context is not set')
         return self.context.get(context)
+
+    def get_chat_settings(self, chat):
+        try:
+            return self.get_chat_context(chat).settings
+        except CommandError:
+            return self.context.defaults
 
     def list_contexts(self, update):
         ret = self.context.list(update.message.chat.id)
@@ -410,22 +417,13 @@ class BotState:
             return res, quote
         return None
 
-    def on_add_self(self, update):
-        self.logger.info('status update: add self')
-        return 'on_add_self', True
-
-    def on_add_bot(self, update):
-        self.logger.info('status update: add bot')
-        return 'on_add_bot', True
-
-    def on_add_user(self, update):
-        self.logger.info('status update: add user')
-        return 'on_add_user', True
-
-    def on_remove_bot(self, update):
-        self.logger.info('status update: remove bot')
-        return 'on_remove_bot', True
-
-    def on_remove_user(self, update):
-        self.logger.info('status update: remove user')
-        return 'on_remove_user', True
+    def on_status_update(self, type_, update):
+        self.logger.info('status update: %s', type_)
+        if type_ is None:
+            return None
+        try:
+            settings = self.get_chat_settings(update.message.chat)
+            return random.choice(settings['on_' + type_]), True
+        except KeyError as ex:
+            self.logger.warning('status_update: %s: %r', type_, ex)
+            return None

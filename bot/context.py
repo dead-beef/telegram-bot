@@ -5,16 +5,24 @@ from markovchain.text import MarkovText, ReplyMode
 from markovchain.storage import SqliteStorage
 
 from .error import CommandError
+from .namespace import Namespace
 
 
 class Context:
-    def __init__(self, root):
+    PATH_SETTINGS = []
+
+    def __init__(self, root, defaults):
         self.root = root
         self.name = os.path.basename(self.root)
         self.is_writable = not root.endswith('_ro')
         self.markov = MarkovText.from_file(
             os.path.join(self.root, 'markov.db'),
             storage=SqliteStorage
+        )
+        self.settings = self.load_settings(
+            os.path.join(self.root, 'settings.json'),
+            self.root,
+            defaults
         )
         self.markov.save()
 
@@ -58,4 +66,20 @@ class Context:
         storage.db.close()
         storage.db = None
         storage.cursor = None
-        return cls(root)
+        return cls(root, settings)
+
+    @classmethod
+    def load_settings(cls, fname, root, parent):
+        try:
+            with open(fname, 'rt') as fp:
+                data = json.load(fp)
+        except OSError:
+            data = {}
+
+        for item in cls.PATH_SETTINGS:
+            try:
+                data[item] = os.path.join(root, data[item])
+            except KeyError:
+                pass
+
+        return Namespace(parent, **data)
