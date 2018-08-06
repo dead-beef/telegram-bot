@@ -24,6 +24,9 @@ class PromiseTimeout(PromiseError):
 class PromiseStateNotSet(PromiseError):
     pass
 
+class DeferredRunCalled(PromiseError):
+    pass
+
 
 class Promise:
     def __init__(self, run, ptype=PromiseType.LAZY, timeout=None):
@@ -131,9 +134,28 @@ class Promise:
         ret._type = ptype
         return ret
 
+    @staticmethod
+    def defer():
+        return Deferred()
+
     @classmethod
     def wrap(cls, func, *args, ptype=PromiseType.LAZY, **kwargs):
         return cls(
             lambda resolve, reject: resolve(func(*args, **kwargs)),
             ptype
         )
+
+
+class Deferred:
+    def __init__(self):
+        self.promise = Promise(self._run, PromiseType.MANUAL, None)
+
+    @staticmethod
+    def _run(*_):
+        raise DeferredRunCalled()
+
+    def resolve(self, value):
+        self.promise._resolve(value)
+
+    def reject(self, value):
+        self.promise._reject(value)
