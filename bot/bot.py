@@ -238,6 +238,7 @@ class Bot:
     @command(C.REPLY_TEXT)
     def on_voice(self, _, update):
         self.download(update.message)
+        return self.state.on_voice
 
     @update_handler
     def on_file(self, _, update):

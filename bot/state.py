@@ -520,6 +520,13 @@ class BotState:
         )
         return None
 
+    def on_voice(self, update):
+        message = update.message
+        reply, quote = self._need_reply(message)
+        if not reply:
+            return None
+        return 'on_voice', quote
+
     def on_status_update(self, type_, update):
         self.logger.info('status update: %s', type_)
         if type_ is None:
