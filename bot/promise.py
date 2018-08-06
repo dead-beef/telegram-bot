@@ -108,6 +108,11 @@ class Promise:
             timeout = self._timeout
         return Promise(promise, ptype, timeout)
 
+    def catch(self, on_reject=None, ptype=None, timeout=-1):
+        if on_reject is None:
+            on_reject = lambda x: x
+        return self.then(None, on_reject, ptype, timeout)
+
     @classmethod
     def resolve(cls, value, ptype=PromiseType.LAZY):
         ret = cls(
