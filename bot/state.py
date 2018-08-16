@@ -447,7 +447,7 @@ class BotState:
         download.then(
             lambda fname: subprocess.check_output(
                 (os.path.join(self.root, 'scripts', 'filter'),
-                 '384x384', settings['filter'], fname, output
+                 settings['filter_size'], settings['filter'], fname, output
                 ),
                 stderr=subprocess.STDOUT,
                 timeout=self.process_timeout

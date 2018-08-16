@@ -1,5 +1,6 @@
 {
 	"filter": "filter.json",
+	"filter_size": "384x384",
 	"on_add_self": [
 		"add_self"
 	],
