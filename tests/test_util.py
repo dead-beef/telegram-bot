@@ -3,6 +3,10 @@ from unittest.mock import Mock
 import pytest
 
 from bot.util import (
+    chunks,
+    intersperse,
+    intersperse_printable,
+    flatten_html,
     re_list_compile,
     remove_control_chars,
     strip_command,
@@ -10,6 +14,46 @@ from bot.util import (
     sanitize_log,
     get_chat_title
 )
+
+
+@pytest.mark.parametrize('test,res', [
+    ((range(4), 1), [[0], [1], [2], [3]]),
+    ((range(4), 2), [[0, 1], [2, 3]]),
+    ((range(4), 3), [[0, 1, 2], [3]]),
+    ((range(4), 4), [[0, 1, 2, 3]])
+])
+def test_chunks(test, res):
+    assert [list(chunk) for chunk in chunks(*test)] == res
+
+
+@pytest.mark.parametrize('test,res', [
+    ((range(3),), [0, 1, 2]),
+    (('abcd', range(3),), ['a', 0, 'b', 1, 'c', 2]),
+    (('abcd', [0, 1], [2, 3, 4, 5]), ['a', 0, 2, 'b', 1, 3]),
+])
+def test_intersperse(test, res):
+    assert list(intersperse(*test)) == res
+
+
+@pytest.mark.parametrize('test,res', [
+    (('abcd', ' ', True), 'a b c d '),
+    (('abcd', '\n', False), '\na\nb\nc\nd'),
+    (('a\nb \nc\u0338d', '_', True), 'a_\nb_ _\nc_\u0338d_')
+])
+def test_intersperse_printable(test, res):
+    assert intersperse_printable(*test) == res
+
+
+@pytest.mark.parametrize('test,res', [
+    ('test', 'test'),
+    ('t<b>e s</b>t', 't<b>e s</b>t'),
+    ('t<b>e st', 't<b>e st</b>'),
+    ('a b c<b>d e<i>f g<u> h i</u> <b>h</b> s</i>t',
+     'a b c<b>d e</b><i>f g</i><u> h i</u><i> </i><b>h</b><i> s</i><b>t</b>'),
+    ('a<b><i><u>b', 'a<b></b><i></i><u>b</u>')
+])
+def test_flatten_html(test, res):
+    assert flatten_html(test) == res
 
 
 @pytest.mark.parametrize('test', [

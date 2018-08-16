@@ -4,6 +4,8 @@ import logging
 import subprocess
 import unicodedata
 from functools import wraps
+from itertools import chain
+from html.parser import HTMLParser
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -42,9 +44,73 @@ class CommandType(enum.IntEnum):
     SET_OPTION = 4
 
 
+class HTMLFlattenParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.result = ''
+        self.tags = []
+        self.current_tag = None
+        self.current_tag_start = None
+
+    def handle_starttag(self, tag, attrs):
+        tag_start = self.get_starttag_text()
+        if self.current_tag is not None:
+            self.tags.append((self.current_tag, self.current_tag_start))
+            self.result += '</%s>' % self.current_tag
+        self.current_tag, self.current_tag_start = tag, tag_start
+        self.result += tag_start
+
+    def handle_endtag(self, tag):
+        if self.current_tag is None:
+            return
+        self.result += '</%s>' % self.current_tag
+        self.current_tag = None
+        if self.tags:
+            self.current_tag, self.current_tag_start = self.tags.pop()
+            self.result += self.current_tag_start
+
+    def handle_data(self, data):
+        self.result += data
+
+    def handle_entityref(self, name):
+        self.result += '&%s;' % name
+
+    def handle_charref(self, name):
+        self.result += '&%s;' % name
+
+    def close(self):
+        super().close()
+        self.tags = []
+        if self.current_tag is not None:
+            self.result += '</%s>' % self.current_tag
+            self.current_tag = None
+
+
 def chunks(list_, size):
     for i in range(0, len(list_), size):
         yield list_[i:i + size]
+
+def intersperse(*seq):
+    return chain.from_iterable(zip(*seq))
+
+def _intersperse_printable(string, ins, after=True):
+    for x in string:
+        cat = unicodedata.category(x)
+        insert = x.isprintable() and (cat[0] not in 'MC' or cat == 'Cn')
+        if insert and not after:
+            yield ins
+        yield x
+        if insert and after:
+            yield ins
+
+def intersperse_printable(string, ins, after=True):
+    return ''.join(_intersperse_printable(string, ins, after))
+
+def flatten_html(data):
+    parser = HTMLFlattenParser()
+    parser.feed(data)
+    parser.close()
+    return parser.result
 
 
 def configure_logger(name,

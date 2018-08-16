@@ -20,6 +20,7 @@ from .util import (
     FILE_TYPES
 )
 from .context_cache import ContextCache
+from .formatter import Formatter
 from .error import CommandError
 
 
@@ -82,7 +83,19 @@ class BotState:
 
         self.default_file_dir = os.path.join(self.root, 'document')
         self.file_dir = defaultdict(lambda: self.default_file_dir)
-        self.tmp_dir = tempfile.mkdtemp(prefix=__name__)
+        self.tmp_dir = tempfile.mkdtemp(prefix=__name__ + '.')
+
+        formatter = os.path.join(
+            self.context.root_settings,
+            'formatter.json'
+        )
+        if os.path.isfile(formatter):
+            with open(formatter) as fp:
+                formatter = json.load(fp)
+            self.formatter = Formatter.load(formatter)
+        else:
+            self.logger.warning('formatter settings not found: %s', formatter)
+            self.formatter = Formatter()
 
         self.async_lock = Lock()
         self.async_running = 0

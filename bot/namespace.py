@@ -12,8 +12,7 @@ class Namespace(argparse.Namespace):
     def __getattribute__(self, attr):
         try:
             return super().__getattribute__(attr)
-        except AttributeError as ex:
-            print(repr(ex))
+        except AttributeError:
             if self.prototype is None:
                 raise
             return self.prototype.__getattribute__(attr)

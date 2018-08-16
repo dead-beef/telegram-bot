@@ -1,8 +1,15 @@
 import re
 import logging
 
+from uuid import uuid4
 from functools import partial
 from base64 import b64encode, b64decode, binascii
+
+from telegram import (
+    ParseMode,
+    InlineQueryResultArticle,
+    InputTextMessageContent
+)
 
 from telegram.ext import (
     CommandHandler,
@@ -23,23 +30,28 @@ class BotCommands:
     HELP = (
         'commands:\n'
         '  /help - bot help\n'
-        '  /start - generate text\n'
-        '  /sticker - send random sticker\n'
-        '  /echo <text> - print text\n'
+        '  /helptags - list formatter tags\n'
+        '  /helpemotes - list formatter emotes\n'
         '  /b64 <text> - encode base64\n'
         '  /b64d <base64> - decode base64\n'
-        '  /settings - print chat settings\n'
-        '  /setcontext - set generator context\n'
         '  /delprivate - delete private context\n'
-        '  /setorder - set markov chain order\n'
+        '  /echo <text> - print text\n'
+        '  /format <text> - format text\n'
+        '  /setcontext - set generator context\n'
         '  /setlearn - set learning mode\n'
+        '  /setorder - set markov chain order\n'
+        '  /settings - print chat settings\n'
         '  /settrigger <regexp> - set trigger\n'
+        '  /start - generate text\n'
+        '  /sticker - send random sticker\n'
         '  /unsettrigger - remove trigger\n'
     )
 
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
         self.state = bot.state
+        self.formatter_tags = self.state.formatter.list_tags()
+        self.formatter_emotes = self.state.formatter.list_emotes()
         self.queue = bot.queue
         self.stopped = bot.stopped
         dispatcher = bot.updater.dispatcher
@@ -94,6 +106,21 @@ class BotCommands:
         msg.edit_text(text='unknown command "%s"' % cmd)
 
     @update_handler
+    def inline_query(self, _, update):
+        query = update.inline_query.query
+        results = [
+            InlineQueryResultArticle(
+                id=uuid4(),
+                title='format',
+                input_message_content=InputTextMessageContent(
+                    self.state.formatter.format(query),
+                    parse_mode=ParseMode.HTML
+                )
+            )
+        ]
+        update.inline_query.answer(results)
+
+    @update_handler
     @command(C.REPLY_TEXT)
     def status_update(self, _, update):
         msg = update.message
@@ -130,12 +157,38 @@ class BotCommands:
 
     @update_handler
     @command(C.NONE)
+    def cmd_helptags(self, _, update):
+        update.message.reply_text(
+            self.formatter_tags,
+            parse_mode=ParseMode.HTML
+        )
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_helpemotes(self, _, update):
+        update.message.reply_text(self.formatter_emotes)
+
+    @update_handler
+    @command(C.NONE)
     def cmd_echo(self, bot, update):
         msg = strip_command(update.message.text)
         if not msg:
             update.message.reply_text('usage: /echo <text>', quote=True)
             return
         bot.send_message(chat_id=update.message.chat_id, text=msg)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_format(self, bot, update):
+        msg = strip_command(update.message.text)
+        if not msg:
+            update.message.reply_text('usage: /format <text>', quote=True)
+            return
+        try:
+            msg = self.state.formatter.format(msg)
+            update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        except Exception as ex:
+            update.message.reply_text(repr(ex), quote=True)
 
     @update_handler
     @command(C.NONE)

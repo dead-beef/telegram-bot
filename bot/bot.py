@@ -192,8 +192,8 @@ class Bot:
                 deferred.resolve(fname)
 
     @update_handler
-    def on_inline(self, _, update):
-        pass
+    def on_inline(self, bot, update):
+        self.commands.inline_query(bot, update)
 
     @update_handler
     @command(C.REPLY_TEXT)
