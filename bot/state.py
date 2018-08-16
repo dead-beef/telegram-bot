@@ -1,7 +1,7 @@
 import os
 import re
+import json
 import random
-import sqlite3
 import logging
 import tempfile
 import subprocess
@@ -19,50 +19,13 @@ from .util import (
     reply_photo,
     FILE_TYPES
 )
+from .database import BotDatabase
 from .context_cache import ContextCache
 from .formatter import Formatter
 from .error import CommandError
 
 
 class BotState:
-    INIT_DATABASE = [
-        'PRAGMA foreign_keys=1',
-        'CREATE TABLE IF NOT EXISTS `user` ('
-        '  `id` INTEGER NOT NULL PRIMARY KEY,'
-        '  `name` TEXT,'
-        '  `permission` INTEGER NOT NULL DEFAULT 0'
-        ')',
-        'CREATE TABLE IF NOT EXISTS `chat` ('
-        '  `id` INTEGER NOT NULL PRIMARY KEY,'
-        '  `title` TEXT,'
-        '  `type` TEXT NOT NULL DEFAULT "private",'
-        '  `context` TEXT,'
-        '  `order` INTEGER,'
-        '  `learn` BOOLEAN NOT NULL DEFAULT 0,'
-        '  `trigger` TEXT,'
-        '  `reply_to_bots` INTEGER DEFAULT 80'
-        ')',
-        'CREATE TABLE IF NOT EXISTS `chat_user` ('
-        '  `chat_id` REFERENCES `chat`(`id`),'
-        '  `user_id` REFERENCES `user`(`id`)'
-        ')',
-        'CREATE TABLE IF NOT EXISTS `sticker_set` ('
-        '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
-        '  `name` TEXT NOT NULL,'
-        '  `title` TEXT NOT NULL'
-        ')',
-        'CREATE TABLE IF NOT EXISTS `sticker` ('
-        '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
-        '  `set` REFERENCES `sticker_set`(`id`),'
-        '  `file_id` TEXT NOT NULL,'
-        '  `emoji` TEXT'
-        ')',
-        'CREATE INDEX IF NOT EXISTS `chat_user_id` ON `chat_user` (`user_id`)',
-        'CREATE INDEX IF NOT EXISTS `chat_id` ON `chat_user` (`chat_id`)',
-        'CREATE INDEX IF NOT EXISTS `sticker_emoji` ON `sticker` (`emoji`)',
-        'CREATE INDEX IF NOT EXISTS `sticker_set_name` ON `sticker_set` (`name`)'
-    ]
-
     ASYNC_MAX_DEFAULT = 4
     PROCESS_TIMEOUT_DEFAULT = 30
 
@@ -108,15 +71,11 @@ class BotState:
             os.makedirs(dir_, exist_ok=True)
             self.file_dir[type_] = dir_
 
-        self.db = sqlite3.connect(os.path.join(self.root, 'bot.db'))
-        self.cursor = self.db.cursor()
-        for cmd in self.INIT_DATABASE:
-            self.cursor.execute(cmd)
-        self.db.commit()
+        self.db = BotDatabase(os.path.join(self.root, 'bot.db'))
 
     def save(self):
         self.logger.info('saving bot state')
-        self.db.commit()
+        self.db.save()
 
     def run_async(self, func, *args, **kwargs):
         def _run_async():
@@ -149,23 +108,8 @@ class BotState:
                 self.async_running -= 1
             raise
 
-    def get_chat(self, chat, fields='*'):
-        query = 'SELECT %s FROM `chat` WHERE id=?' % fields
-        while True:
-            self.cursor.execute(query, (chat.id,))
-            row = self.cursor.fetchone()
-            if row is not None:
-                return row
-            self.cursor.execute(
-                'INSERT INTO `chat`'
-                ' (`id`, `title`, `type`)'
-                ' VALUES (?, ?, ?)',
-                (chat.id, chat.title, chat.type)
-            )
-            self.db.commit()
-
     def get_chat_context(self, chat):
-        context = self.get_chat(chat, 'context')[0]
+        context = self.db.get_chat_data(chat, 'context')
         if context is None:
             raise CommandError('generator context is not set')
         return self.context.get(context)
@@ -188,7 +132,7 @@ class BotState:
         name = query.data
 
         self.logger.info('set_context %s %s', chat.id, name)
-        prev_context, prev_order, prev_learn = self.get_chat(
+        prev_context, prev_order, prev_learn = self.db.get_chat_data(
             chat,
             '`context`,`order`,`learn`'
         )
@@ -211,13 +155,8 @@ class BotState:
         else:
             order = prev_order
 
-        self.cursor.execute(
-            'UPDATE chat'
-            ' SET `context`=?, `order`=?, `learn`=?'
-            ' WHERE `id`=?',
-            (name, order, learn, chat.id)
-        )
-        self.db.commit()
+        self.db.set_chat_data(chat, context=name, order=order, learn=learn)
+
         return 'context: %s -> %s\norder: %s -> %s\nlearn: %s -> %s' % (
             prev_context, name,
             prev_order, order,
@@ -233,17 +172,13 @@ class BotState:
         chat = query.message.chat
         order = int(query.data)
         self.logger.info('set_order %s %s', chat.id, order)
-        prev = self.get_chat(chat, '`order`')[0]
         context = self.get_chat_context(chat)
         if order not in context.get_orders():
             raise CommandError('invalid order: %s: not in %s' % (
                 order, context.get_orders()
             ))
-        self.cursor.execute(
-            'UPDATE `chat` SET `order`=? WHERE `id`=?',
-            (order, chat.id)
-        )
-        self.db.commit()
+        prev = self.db.get_chat_data(chat, '`order`')
+        self.db.set_chat_data(chat, order=order)
         return 'order: %s -> %s' % (prev, order)
 
     def list_learn_modes(self, update):
@@ -257,15 +192,11 @@ class BotState:
         chat = query.message.chat
         learn = query.data.lower() == 'on'
         self.logger.info('set_learn %s %s', chat.id, learn)
-        prev = bool(self.get_chat(chat, '`learn`')[0])
         context = self.get_chat_context(chat)
         if learn and not context.is_writable:
             raise CommandError('context %s is read only' % context)
-        self.cursor.execute(
-            'UPDATE `chat` SET `learn`=? WHERE `id`=?',
-            (learn, chat.id)
-        )
-        self.db.commit()
+        prev = bool(self.db.get_chat_data(chat, '`learn`'))
+        self.db.set_chat_data(chat, learn=learn)
         return 'learn: %s -> %s' % (prev, learn)
 
     def confirm_delete_private_context(self, update):
@@ -283,19 +214,17 @@ class BotState:
         query = update.callback_query
         chat = query.message.chat
         if query.data.lower() == 'yes':
+            context = self.db.get_chat_data(chat, 'context')
+            if context == str(chat.id):
+                self.db.set_chat_data(chat, context=None)
             self.context.delete_private(chat)
-            self.cursor.execute(
-                'UPDATE chat SET context=NULL WHERE id=? AND context=?',
-                (chat.id, str(chat.id))
-            )
-            self.db.commit()
             return 'deleted private context "%s"' % chat.id
         return 'cancelled'
 
     def show_settings(self, update):
-        context, order, learn, trigger, reply_to_bots = self.get_chat(
+        context, order, learn, trigger = self.db.get_chat_data(
             update.message.chat,
-            '`context`,`order`,`learn`,`trigger`,`reply_to_bots`'
+            '`context`,`order`,`learn`,`trigger`'
         )
         learn = bool(learn)
         reply = (
@@ -304,26 +233,8 @@ class BotState:
             '    markov chain order: %s\n'
             '    learn: %s\n'
             '    trigger: %s\n'
-            #'    probability of replying to bots: %s%%\n'
         ) % (context, order, learn, trigger)
         return reply
-
-    def set_bot_reply_probability(self, update):
-        message = update.message
-        value = strip_command(message.text)
-        if not value:
-            raise CommandError('usage: /setbotreply <0-100>')
-        try:
-            value = min(100, max(int(value), 0))
-        except ValueError as ex:
-            raise CommandError(ex)
-        prev = self.get_chat(message.chat, 'reply_to_bots')[0]
-        self.cursor.execute(
-            'UPDATE chat SET reply_to_bots=? WHERE id=?',
-            (value, message.chat.id)
-        )
-        self.db.commit()
-        return 'probability of replying to bots: %d%% -> %d%%' % (prev, value)
 
     def set_trigger(self, update):
         message = update.message
@@ -335,29 +246,19 @@ class BotState:
                 re.compile(expr)
             except re.error as ex:
                 raise CommandError(ex)
-        prev = self.get_chat(message.chat, 'trigger')[0]
-        self.cursor.execute(
-            'UPDATE chat SET trigger=? WHERE id=?',
-            (expr, message.chat.id)
-        )
-        self.db.commit()
+        prev = self.db.get_chat_data(message.chat, 'trigger')
+        self.db.set_chat_data(message.chat, trigger=expr)
         return 'trigger: %s -> %s' % (prev, expr)
 
     def remove_trigger(self, update):
-        prev = self.get_chat(update.message.chat, 'trigger')[0]
-        self.cursor.execute(
-            'UPDATE chat SET trigger=NULL WHERE id=?',
-            (update.message.chat.id,)
-        )
-        self.db.commit()
+        prev = self.db.get_chat_data(update.message.chat, 'trigger')
+        self.db.set_chat_data(update.message.chat, trigger=None)
         return 'trigger: %s -> None' % prev
 
     def _need_reply(self, message):
         reply = False
         quote = False
         text = get_message_text(message)
-
-        trigger = self.get_chat(message.chat, 'trigger')
 
         if message.chat.type == message.chat.PRIVATE:
             self.logger.info('private chat: reply=True')
@@ -372,57 +273,20 @@ class BotState:
                 self.logger.info('username in message text: reply=True')
                 quote = True
                 reply = True
-            elif re.search(trigger, text, re.I):
-                self.logger.info('trigger: reply=True')
-                quote = True
-                reply = True
-
-        #if reply:
-        #    if message.from_user.is_bot:
-        #        rnd = randint(0, 99)
-        #        self.logger.info('reply to bot: %d / %d', rnd, reply_to_bots)
-        #        if rnd >= reply_to_bots:
-        #            self.logger.info('not replying to bot')
-        #            reply = False
+            else:
+                trigger = self.db.get_chat_data(message.chat, 'trigger')
+                if trigger is not None and re.search(trigger, text, re.I):
+                    self.logger.info('trigger: reply=True')
+                    quote = True
+                    reply = True
 
         return reply, quote
 
-    def need_sticker_set(self, name):
-        self.cursor.execute(
-            'SELECT COUNT(*) FROM `sticker_set` WHERE `name`=?',
-            (name,)
-        )
-        res = self.cursor.fetchone()[0]
-        self.logger.info('need_sticker_set: name=%s count=%s', name, res)
-        if res:
-            raise CommandError('sticker set exists')
-        return True
-
-    def learn_sticker_set(self, set_):
-        self.logger.info(
-            'learn_sticker_set: name=%s title=%s',
-            set_.name, set_.title
-        )
-        self.cursor.execute(
-            'INSERT INTO `sticker_set` (`name`, `title`) VALUES (?, ?)',
-            (set_.name, set_.title)
-        )
-        self.cursor.execute(
-            'SELECT `id` FROM `sticker_set` WHERE `name`=?',
-            (set_.name,)
-        )
-        set_id = self.cursor.fetchone()[0]
-        for sticker in set_.stickers:
-            self.cursor.execute(
-                'INSERT INTO'
-                ' `sticker` (`set`, `file_id`, `emoji`)'
-                ' VALUES (?, ?, ?)',
-                (set_id, sticker.file_id, sticker.emoji)
-            )
-        self.db.commit()
-
     def random_text(self, update):
-        context, order = self.get_chat(update.message.chat, '`context`,`order`')
+        context, order = self.db.get_chat_data(
+            update.message.chat,
+            '`context`,`order`'
+        )
         if context is None:
             self.logger.info('no context')
             raise CommandError('generator context is not set')
@@ -432,15 +296,6 @@ class BotState:
         except KeyError as ex:
             self.logger.error(ex)
             return None
-
-    def random_sticker(self):
-        self.cursor.execute(
-            'SELECT `file_id` FROM `sticker` ORDER BY RANDOM() LIMIT 1'
-        )
-        res = self.cursor.fetchone()
-        if res is None:
-            return None
-        return res[0]
 
     def filter_image(self, update, download, settings, quote=False):
         output = os.path.join(
@@ -475,7 +330,7 @@ class BotState:
         message = update.message
         reply, quote = self._need_reply(message)
 
-        context, order, learn = self.get_chat(
+        context, order, learn = self.db.get_chat_data(
             message.chat,
             '`context`,`order`,`learn`'
         )
@@ -499,11 +354,8 @@ class BotState:
                 except KeyError as ex:
                     self.logger.error(ex)
             if learn:
-                if message.from_user.is_bot:
-                    self.logger.info('not learning from bots')
-                else:
-                    self.logger.info('learn')
-                    context.learn_text(text)
+                self.logger.info('learn')
+                context.learn_text(text)
         elif reply:
             self.logger.info('no context')
             raise CommandError('generator context is not set')
@@ -514,7 +366,7 @@ class BotState:
         message = update.message
         reply, quote = self._need_reply(message)
         if reply:
-            res = self.random_sticker()
+            res = self.db.random_sticker()
             self.logger.info(res)
             if res is None:
                 return None

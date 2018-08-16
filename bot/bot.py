@@ -211,7 +211,7 @@ class Bot:
         sticker = update.message.sticker
         if sticker.set_name is not None:
             need_sticker_set = Promise.wrap(
-                self.state.need_sticker_set,
+                self.state.db.need_sticker_set,
                 sticker.set_name,
                 ptype=PT.MANUAL
             )
@@ -219,7 +219,7 @@ class Bot:
                 lambda _: bot.getStickerSet(sticker.set_name)
             )
             learn_sticker_set = get_sticker_set.then(
-                self.state.learn_sticker_set,
+                self.state.db.learn_sticker_set,
                 ptype=PT.MANUAL
             )
             self.queue.put(need_sticker_set)
