@@ -29,7 +29,7 @@ from .util import (
 class Bot:
     LOG_FORMAT = '[%(asctime).19s] [%(name)s] [%(levelname)s] %(message)s'
     MSG_LOG_FORMAT = ('[%(asctime).19s]'
-                      ' [%(chat_id)d | %(chat_name)s]'
+                      ' [%(chat_id)s | %(chat_name)s]'
                       ' [%(user_id)s | %(user_link)s | %(user_name)s]'
                       ' %(message)s')
 
