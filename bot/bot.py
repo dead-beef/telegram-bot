@@ -156,20 +156,49 @@ class Bot:
             self.logger.info('stopping updater')
             self.updater.stop()
 
-    def log_message(self, msg):
-        self.logger.debug('message %s', msg)
+    def log_update(self, update):
+        self.logger.debug('log_update %s', update)
+
+        self.queue.put(Promise.wrap(
+            self.state.db.learn_update,
+            update,
+            ptype=PT.MANUAL
+        ))
+
         if not self.log_messages:
             return
-        extra = {
-            'chat_id': msg.chat.id,
-            'user_id': msg.from_user.id,
-            'chat_name': sanitize_log(get_chat_title(msg.chat)),
-            'user_link': '@' + sanitize_log(str(msg.from_user.username)),
-            'user_name': sanitize_log('%s %s' % (str(msg.from_user.first_name),
-                                                 str(msg.from_user.last_name)))
-        }
-        text = sanitize_log(msg.text, True)
-        self.msg_logger.info(text, extra=extra)
+
+        if update.effective_message is not None:
+            msg = update.effective_message
+            extra = {
+                'chat_id': msg.chat.id,
+                'user_id': msg.from_user.id,
+                'chat_name': sanitize_log(get_chat_title(msg.chat)),
+                'user_link': '@' + sanitize_log(str(msg.from_user.username)),
+                'user_name': sanitize_log('%s %s' % (
+                    str(msg.from_user.first_name),
+                    str(msg.from_user.last_name)
+                ))
+            }
+            text = sanitize_log(msg.text or msg.caption or '', True)
+        elif update.inline_query is not None:
+            msg = update.inline_query
+            extra = {
+                'chat_id': None,
+                'user_id': msg.from_user.id,
+                'chat_name': '<inline query>',
+                'user_link': '@' + sanitize_log(str(msg.from_user.username)),
+                'user_name': sanitize_log('%s %s' % (
+                    str(msg.from_user.first_name),
+                    str(msg.from_user.last_name)
+                ))
+            }
+            text = sanitize_log(msg.query, True)
+        else:
+            text = None
+
+        if text is not None:
+            self.msg_logger.info(text, extra=extra)
 
     def on_error(self, _, update, error):
         self.logger.error('update "%s" caused error "%s"', update, error)
@@ -184,6 +213,7 @@ class Bot:
             self.updater.bot.get_file(fid).download(fname)
             self.logger.info('download complete: %s -> %s', ftype, fname)
         except BaseException as ex:
+            self.logger.error('download error: %s -> %s: %r', ftype, fname, ex)
             if deferred is not None:
                 deferred.reject(ex)
             raise
@@ -198,7 +228,6 @@ class Bot:
     @update_handler
     @command(C.REPLY_TEXT)
     def on_text(self, _, update):
-        self.log_message(update.effective_message)
         if update.message is None:
             return None
         return self.state.on_text

@@ -260,6 +260,8 @@ def update_handler(method):
             update.effective_user,
             update.effective_message
         )
+        if hasattr(self, 'log_update'):
+            self.log_update(update)
         if self.stopped.is_set():
             self.logger.info('not handling updates: stopped')
             return
