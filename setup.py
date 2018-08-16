@@ -27,6 +27,7 @@ setup(name='telegram-bot',
           'console_scripts': ['telegram-bot=bot:cli.main'],
       },
       install_requires=[
+          'enum34',
           'python-telegram-bot',
           'pysocks',
           'markovchain>=0.2.0'
