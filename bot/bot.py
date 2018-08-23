@@ -4,6 +4,7 @@ from queue import Queue
 from threading import Event
 from functools import partial
 
+from telegram import ParseMode
 from telegram.ext import (
     Updater,
     MessageHandler,
@@ -79,6 +80,10 @@ class Bot:
         dispatcher.add_handler(MessageHandler(
             Filters.photo,
             self.on_photo
+        ))
+        dispatcher.add_handler(MessageHandler(
+            Filters.contact,
+            self.on_contact
         ))
         dispatcher.add_handler(MessageHandler(
             Filters.audio
@@ -262,6 +267,24 @@ class Bot:
         deferred = Promise.defer()
         self.download(update.message, deferred)
         return partial(self.state.on_photo, deferred)
+
+    @update_handler
+    def on_contact(self, _, update):
+        msg = update.message
+        if msg.chat.type == msg.chat.PRIVATE:
+            if msg.contact.user_id is None:
+                msg.reply_text('missing user id', quote=True)
+            else:
+                msg.reply_text(
+                    '[contact %s %s %s %s](tg://user?id=%s)' % (
+                        msg.contact.phone_number,
+                        msg.contact.first_name,
+                        msg.contact.last_name,
+                        msg.contact.user_id,
+                        msg.contact.user_id
+                    ),
+                    parse_mode=ParseMode.MARKDOWN
+                )
 
     @update_handler
     @command(C.REPLY_TEXT)
