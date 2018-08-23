@@ -16,7 +16,6 @@ class BotDatabase:
         '  `last_name` TEXT,'
         '  `username` TEXT,'
         '  `permission` INTEGER NOT NULL DEFAULT 0,'
-        '  `phone` TEXT,'
         '  `last_update` INTEGER NOT NULL DEFAULT 0'
         ')',
         'CREATE TABLE IF NOT EXISTS `chat` ('
@@ -44,6 +43,11 @@ class BotDatabase:
         '  `sticker_id` TEXT,'
         '  `inline_query` TEXT'
         ')',
+        'CREATE TABLE IF NOT EXISTS `user_phone` ('
+        '  `user_id` INTEGER NOT NULL,'
+        '  `phone_number` TEXT NOT NULL,'
+        '  `timestamp` INTEGER NOT NULL'
+        ')',
         'CREATE TABLE IF NOT EXISTS `chat_user` ('
         '  `chat_id` REFERENCES `chat`(`id`),'
         '  `user_id` REFERENCES `user`(`id`)'
@@ -68,8 +72,8 @@ class BotDatabase:
     ]
 
     def __init__(self, path,
-                 user_update_interval=300,
-                 chat_update_interval=3600,
+                 user_update_interval=86400,
+                 chat_update_interval=86400,
                  sticker_set_update_interval=-1):
         self.db_path = path
         self.db = sqlite3.connect(path)
@@ -193,6 +197,41 @@ class BotDatabase:
                     last_update=current_time
                 )
 
+    def learn_user_phone(self, user_id, phone):
+        self.cursor.execute(
+            'SELECT * FROM `user_phone`'
+            ' WHERE `user_id`=? AND `phone_number`=?',
+            (user_id, phone)
+        )
+        row = self.cursor.fetchone()
+        if row is not None:
+            return
+        self.cursor.execute(
+            'INSERT INTO `user_phone`'
+            ' (`user_id`, `phone_number`, `timestamp`)'
+            ' VALUES (?, ?, ?)',
+            (user_id, phone, int(time.time()))
+        )
+        self.db.commit()
+
+    def learn_contact(self, contact):
+        if contact.user_id is not None:
+            if contact.phone_number is not None:
+                self.learn_user_phone(contact.user_id, contact.phone_number)
+            self.cursor.execute(
+                'SELECT * FROM `user` WHERE `id`=?',
+                (contact.user_id,)
+            )
+            row = self.cursor.fetchone()
+            if row is None:
+                self.cursor.execute(
+                    'INSERT INTO `user`'
+                    ' (`id`, `first_name`, `last_name`)'
+                    ' VALUES (?, ?, ?)',
+                    (contact.user_id, contact.first_name, contact.last_name)
+                )
+                self.db.commit()
+
     def learn_chat(self, chat):
         last_update = self.get_chat_data(chat, 'last_update')
         if self.chat_update_interval >= 0:
@@ -209,6 +248,9 @@ class BotDatabase:
                 )
 
     def learn_message(self, message):
+        if message.contact is not None:
+            return self.learn_contact(message.contact)
+
         chat_id = message.chat.id
         if message.from_user is None:
             user_id = None

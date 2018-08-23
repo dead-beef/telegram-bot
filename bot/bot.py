@@ -164,11 +164,15 @@ class Bot:
     def log_update(self, update):
         self.logger.debug('log_update %s', update)
 
-        self.queue.put(Promise.wrap(
+        learn = Promise.wrap(
             self.state.db.learn_update,
             update,
             ptype=PT.MANUAL
-        ))
+        )
+        self.queue.put(learn)
+        learn.catch(
+            lambda ex: self.logger.error('log_update: %r: %s', ex, update)
+        ).wait()
 
         if not self.log_messages:
             return
