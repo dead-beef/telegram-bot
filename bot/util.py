@@ -9,7 +9,7 @@ from html.parser import HTMLParser
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from .error import BotError
+from .error import BotError, CommandError
 from .promise import Promise, PromiseType as PT
 
 
@@ -140,6 +140,14 @@ def remove_control_chars(string):
 
 def strip_command(string):
     return RE_COMMAND.sub('', string).strip()
+
+def get_command_args(msg, nargs=1, help='missing command argument'):
+    if nargs != 1:
+        raise NotImplementedError('get_command_args nargs != 1')
+    msg = strip_command(msg)
+    if not msg:
+        raise CommandError(help)
+    return msg
 
 def match_command_user(cmd, username):
     match = RE_COMMAND_USERNAME.match(cmd)
@@ -284,12 +292,20 @@ def command(type_):
                and not match_command_user(update.message.text,
                                           self.state.username)):
                 self.logger.info('!match_command_user %s' % update.message.text)
-                return None
+                return
+
+            try:
+                res = method(self, bot, update)
+            except (BotError, dice.DiceBaseException) as ex:
+                update.message.reply_text(str(ex), quote=True)
+                return
+            except Exception as ex:
+                update.message.reply_text(repr(ex), quote=True)
+                raise
 
             if type_ == CommandType.NONE:
-                return method(self, bot, update)
-
-            if type_ == CommandType.REPLY_TEXT:
+                return res
+            elif type_ == CommandType.REPLY_TEXT:
                 on_resolve = lambda msg: reply_text(update, msg, True)
                 on_reject = on_resolve
             elif type_ == CommandType.REPLY_STICKER:
@@ -304,7 +320,6 @@ def command(type_):
             else:
                 raise ValueError('invalid command type: %s' % type_)
 
-            res = method(self, bot, update)
             if res is None:
                 self.logger.info('%s: no command', method.__name__)
                 return

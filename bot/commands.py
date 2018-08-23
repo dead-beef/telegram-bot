@@ -3,7 +3,7 @@ import logging
 
 from uuid import uuid4
 from functools import partial
-from base64 import b64encode, b64decode, binascii
+from base64 import b64encode, b64decode
 
 from telegram import (
     ParseMode,
@@ -18,8 +18,10 @@ from telegram.ext import (
     Filters
 )
 
+from .error import CommandError
+from .promise import Promise, PromiseType as PT
 from .util import (
-    strip_command,
+    get_command_args,
     command,
     update_handler,
     CommandType as C
@@ -171,51 +173,33 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cmd_echo(self, bot, update):
-        msg = strip_command(update.message.text)
-        if not msg:
-            update.message.reply_text('usage: /echo <text>', quote=True)
-            return
+        msg = get_command_args(update.message.text,
+                               help='usage: /echo <text>')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
 
     @update_handler
     @command(C.NONE)
-    def cmd_format(self, bot, update):
-        msg = strip_command(update.message.text)
-        if not msg:
-            update.message.reply_text('usage: /format <text>', quote=True)
-            return
-        try:
-            msg = self.state.formatter.format(msg)
-            update.message.reply_text(msg, parse_mode=ParseMode.HTML)
-        except Exception as ex:
-            update.message.reply_text(repr(ex), quote=True)
+    def cmd_format(self, _, update):
+        msg = get_command_args(update.message.text,
+                               help='usage: /format <text>')
+        msg = self.state.formatter.format(msg)
+        update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
     @update_handler
     @command(C.NONE)
     def cmd_b64(self, _, update):
-        msg = strip_command(update.message.text)
-        if not msg:
-            update.message.reply_text('usage: /b64 <text>', quote=True)
-            return
-        try:
-            msg = b64encode(msg.encode('utf-8')).decode('ascii')
-        except (UnicodeEncodeError, UnicodeDecodeError, binascii.Error) as ex:
-            msg = repr(ex)
+        msg = get_command_args(update.message.text,
+                               help='usage: /b64 <text>')
+        msg = b64encode(msg.encode('utf-8')).decode('ascii')
         update.message.reply_text(msg, quote=True)
 
     @update_handler
     @command(C.NONE)
     def cmd_b64d(self, bot, update):
-        msg = strip_command(update.message.text)
-        if not msg:
-            update.message.reply_text('usage: /b64d <base64>', quote=True)
-            return
-        try:
-            msg = b64decode(msg.encode('utf-8'), validate=True).decode('utf-8')
-        except (UnicodeEncodeError, UnicodeDecodeError, binascii.Error) as ex:
-            update.message.reply_text(repr(ex), quote=True)
-        else:
-            bot.send_message(chat_id=update.message.chat_id, text=msg)
+        msg = get_command_args(update.message.text,
+                               help='usage: /b64d <base64>')
+        msg = b64decode(msg.encode('utf-8'), validate=True).decode('utf-8')
+        bot.send_message(chat_id=update.message.chat_id, text=msg)
 
     @update_handler
     @command(C.REPLY_TEXT)
@@ -268,8 +252,3 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def cmd_unsettrigger(self, *_):
         return self.state.remove_trigger
-
-    @update_handler
-    @command(C.REPLY_TEXT)
-    def cmd_setbotreply(self, *_):
-        return self.state.set_bot_reply_probability
