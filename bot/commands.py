@@ -6,6 +6,7 @@ from functools import partial
 from base64 import b64encode, b64decode
 
 from telegram import (
+    TelegramError,
     ParseMode,
     InlineQueryResultArticle,
     InputTextMessageContent
@@ -24,6 +25,7 @@ from .util import (
     get_command_args,
     command,
     update_handler,
+    is_phone_number,
     CommandType as C
 )
 
@@ -39,6 +41,7 @@ class BotCommands:
         '  /delprivate - delete private context\n'
         '  /echo <text> - print text\n'
         '  /format <text> - format text\n'
+        '  /getuser <+number> - find user\n'
         '  /setcontext - set generator context\n'
         '  /setlearn - set learning mode\n'
         '  /setorder - set markov chain order\n'
@@ -48,6 +51,8 @@ class BotCommands:
         '  /sticker - send random sticker\n'
         '  /unsettrigger - remove trigger\n'
     )
+
+    GET_USER_PERMISSION = 255
 
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
@@ -74,6 +79,55 @@ class BotCommands:
             Filters.status_update,
             self.status_update
         ))
+
+    def _check_permission(self, user, min_value):
+        get_permission = Promise.wrap(
+            self.state.db.get_user_data,
+            user,
+            'permission',
+            ptype=PT.MANUAL
+        )
+        self.queue.put(get_permission)
+        get_permission.wait()
+        value = get_permission.value
+        if not isinstance(value, int):
+            self.logger.error('_check_permission: %r', value)
+            return False
+        return value >= min_value
+
+    def _get_user_id(self, msg, phone):
+        user_id = None
+        contact = msg.reply_contact(
+            phone_number=phone,
+            quote=False,
+            first_name='user'
+        )
+
+        try:
+            self.logger.info('contact %s', contact)
+            user_id = contact.contact.user_id
+        finally:
+            #contact.delete()
+            pass
+
+        if user_id is not None:
+            learn = Promise.wrap(
+                self.state.db.learn_user_phone,
+                user_id, phone,
+                ptype=PT.MANUAL
+            )
+            self.queue.put(learn)
+            learn.catch(
+                lambda ex: self.logger.error('learn_phone: %r', ex)
+            ).wait()
+
+        return user_id
+
+    def _get_user_link(self, msg, phone):
+        user_id = self._get_user_id(msg, phone)
+        if user_id is None:
+            return None
+        return '[@{0}](tg://user?id={0})'.format(user_id)
 
     @update_handler
     def unknown_command(self, _, update):
@@ -200,6 +254,25 @@ class BotCommands:
                                help='usage: /b64d <base64>')
         msg = b64decode(msg.encode('utf-8'), validate=True).decode('utf-8')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_getuser(self, _, update):
+        msg = update.message
+        if not self._check_permission(msg.from_user, self.GET_USER_PERMISSION):
+            raise CommandError('permission denied')
+        if msg.chat.type != msg.chat.PRIVATE:
+            raise CommandError('chat is not private')
+
+        num = get_command_args(update.message.text,
+                               help='usage: /getuser <number>')
+        if not is_phone_number(num):
+            raise CommandError('invalid phone number')
+
+        res = self._get_user_link(msg, num)
+        if res is None:
+            res = 'not found'
+        msg.reply_text(res, parse_mode=ParseMode.MARKDOWN)
 
     @update_handler
     @command(C.REPLY_TEXT)

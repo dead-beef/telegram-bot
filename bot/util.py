@@ -22,6 +22,8 @@ LOGGER = logging.getLogger(__name__)
 RE_COMMAND = re.compile(r'^/[^\s]+\s*')
 RE_COMMAND_USERNAME = re.compile(r'^/[^@\s]+@([^\s]+)\s*')
 
+RE_PHONE_NUMBER = re.compile(r'^\+[0-9]+$')
+
 RE_SANITIZE_MSG = re_list_compile([
     (r'<LF>', '[LF]'),
     (r'\n+', ' <LF> '),
@@ -131,6 +133,9 @@ def configure_logger(name,
 
     return logger
 
+
+def is_phone_number(string):
+    return RE_PHONE_NUMBER.match(string)
 
 def remove_control_chars(string):
     return ''.join(
