@@ -7,6 +7,7 @@ from functools import wraps
 from itertools import chain
 from html.parser import HTMLParser
 
+import dice
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from .error import BotError, CommandError

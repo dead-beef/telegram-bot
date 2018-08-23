@@ -5,6 +5,8 @@ from uuid import uuid4
 from functools import partial
 from base64 import b64encode, b64decode
 
+import dice
+
 from telegram import (
     TelegramError,
     ParseMode,
@@ -42,6 +44,7 @@ class BotCommands:
         '  /echo <text> - print text\n'
         '  /format <text> - format text\n'
         '  /getuser <+number> - find user\n'
+        '  /roll <dice> - roll dice\n'
         '  /setcontext - set generator context\n'
         '  /setlearn - set learning mode\n'
         '  /setorder - set markov chain order\n'
@@ -230,6 +233,18 @@ class BotCommands:
         msg = get_command_args(update.message.text,
                                help='usage: /echo <text>')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_roll(self, _, update):
+        msg = get_command_args(update.message.text,
+                               help='usage: /roll <dice>')
+        roll = int(dice.roll(msg))
+        update.message.reply_text(
+            '<i>%s</i> → <b>%s</b>' % (msg, roll),
+            quote=True,
+            parse_mode=ParseMode.HTML
+        )
 
     @update_handler
     @command(C.NONE)
