@@ -248,6 +248,11 @@ class BotDatabase:
                 )
 
     def learn_message(self, message):
+        if message.forward_from is not None:
+            self.learn_user(message.forward_from)
+        if message.forward_from_chat is not None:
+            self.learn_chat(message.forward_from_chat)
+
         if message.contact is not None:
             return self.learn_contact(message.contact)
 
