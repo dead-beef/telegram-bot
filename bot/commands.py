@@ -207,7 +207,7 @@ class BotCommands:
     @update_handler
     @command(C.REPLY_STICKER)
     def cmd_sticker(self, *_):
-        return lambda *_: (self.state.random_sticker(), True)
+        return lambda *_: (self.state.db.random_sticker(), True)
 
     @update_handler
     @command(C.NONE)
