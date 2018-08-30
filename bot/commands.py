@@ -8,7 +8,6 @@ from base64 import b64encode, b64decode
 import dice
 
 from telegram import (
-    TelegramError,
     ParseMode,
     InlineQueryResultArticle,
     InputTextMessageContent
@@ -110,8 +109,7 @@ class BotCommands:
             self.logger.info('contact %s', contact)
             user_id = contact.contact.user_id
         finally:
-            #contact.delete()
-            pass
+            contact.delete()
 
         if user_id is not None:
             learn = Promise.wrap(
@@ -130,7 +128,7 @@ class BotCommands:
         user_id = self._get_user_id(msg, phone)
         if user_id is None:
             return None
-        return '[@{0}](tg://user?id={0})'.format(user_id)
+        return '[@{0} {1}](tg://user?id={0})'.format(user_id, phone)
 
     @update_handler
     def unknown_command(self, _, update):
@@ -286,7 +284,7 @@ class BotCommands:
 
         res = self._get_user_link(msg, num)
         if res is None:
-            res = 'not found'
+            res = 'not found: ' + num
         msg.reply_text(res, parse_mode=ParseMode.MARKDOWN)
 
     @update_handler
