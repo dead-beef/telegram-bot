@@ -292,7 +292,7 @@ class BotDatabase:
 
     def learn_inline_query(self, query):
         user_id = query.from_user.id
-        timestamp = int(query.date.timestamp())
+        timestamp = int(time.time())
         inline_query = query.query
 
         self.cursor.execute(
