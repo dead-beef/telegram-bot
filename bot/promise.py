@@ -43,6 +43,12 @@ class Promise:
             self._thread = Thread(target=self.run)
             self._thread.start()
 
+    @property
+    def value(self):
+        if self._state == PromiseState.PENDING:
+            raise PromiseError('get pending promise value')
+        return self._value
+
     def _set(self, state, value):
         self._state = state
         self._value = value
