@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from bot.util import (
+    srange,
     chunks,
     intersperse,
     intersperse_printable,
@@ -25,6 +26,25 @@ from bot.util import (
 def test_chunks(test, res):
     assert [list(chunk) for chunk in chunks(*test)] == res
 
+
+@pytest.mark.parametrize('test,res', [
+    (('', ''), ['']),
+    (('1', '3'), ['1', '2', '3']),
+    (('ab01', 'ab10'), ['ab01', 'ab02', 'ab03', 'ab04', 'ab05',
+                        'ab06', 'ab07', 'ab08', 'ab09', 'ab10']),
+    (('xx999', 'xx997', 3), ['xx997', 'xx998', 'xx999']),
+    (('xyz', 'xyz'), ['xyz']),
+    (('xyz', 'xyu'), None),
+    (('xy00', 'xy-1'), None),
+    (('0', '10'), None),
+    (('01', '10', 9), None)
+])
+def test_srange(test, res):
+    if res is None:
+        with pytest.raises(ValueError):
+            list(srange(*test))
+    else:
+        assert list(srange(*test)) == res
 
 @pytest.mark.parametrize('test,res', [
     ((range(3),), [0, 1, 2]),

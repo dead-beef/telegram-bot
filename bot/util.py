@@ -1,3 +1,4 @@
+import os
 import re
 import enum
 import logging
@@ -92,6 +93,27 @@ class HTMLFlattenParser(HTMLParser):
 def chunks(list_, size):
     for i in range(0, len(list_), size):
         yield list_[i:i + size]
+
+def srange(x, y, maxlen=None):
+    if len(x) != len(y):
+        raise ValueError('srange string length is not equal')
+    if x > y:
+        x, y = y, x
+    elif x == y:
+        yield x
+        return
+    prefix = os.path.commonprefix((x, y))
+    suffix = len(x) - len(prefix)
+    x = x[-suffix:]
+    y = y[-suffix:]
+    if not (x.isdigit() and y.isdigit()):
+        raise ValueError('invalid range: %r - %r' % (x, y))
+    x = int(x, 10)
+    y = int(y, 10) + 1
+    if maxlen is not None and y - x > maxlen:
+        raise ValueError('invalid range length: %d > %d' % (y - x, maxlen))
+    for i in range(x, y):
+        yield '%s%0*d' % (prefix, suffix, i)
 
 def intersperse(*seq):
     return chain.from_iterable(zip(*seq))
