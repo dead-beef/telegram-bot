@@ -27,7 +27,8 @@ from .util import (
     command,
     update_handler,
     is_phone_number,
-    CommandType as C
+    CommandType as C,
+    Permission as P
 )
 
 
@@ -54,8 +55,6 @@ class BotCommands:
         '  /unsettrigger - remove trigger\n'
     )
 
-    GET_USER_PERMISSION = 255
-
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
         self.state = bot.state
@@ -81,21 +80,6 @@ class BotCommands:
             Filters.status_update,
             self.status_update
         ))
-
-    def _check_permission(self, user, min_value):
-        get_permission = Promise.wrap(
-            self.state.db.get_user_data,
-            user,
-            'permission',
-            ptype=PT.MANUAL
-        )
-        self.queue.put(get_permission)
-        get_permission.wait()
-        value = get_permission.value
-        if not isinstance(value, int):
-            self.logger.error('_check_permission: %r', value)
-            return False
-        return value >= min_value
 
     def _get_user_id(self, msg, phone):
         user_id = None
@@ -281,14 +265,9 @@ class BotCommands:
         bot.send_message(chat_id=update.message.chat_id, text=msg)
 
     @update_handler
-    @command(C.NONE)
+    @command(C.NONE, P.ADMIN)
     def cmd_getuser(self, _, update):
         msg = update.message
-        if not self._check_permission(msg.from_user, self.GET_USER_PERMISSION):
-            raise CommandError('permission denied')
-        if msg.chat.type != msg.chat.PRIVATE:
-            raise CommandError('chat is not private')
-
         num = get_command_args(update.message.text,
                                help='usage: /getuser <number>')
         if not is_phone_number(num):

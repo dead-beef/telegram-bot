@@ -40,6 +40,11 @@ RE_SANITIZE = RE_SANITIZE_MSG + re_list_compile([
 FILE_TYPES = ['video', 'audio', 'document', 'voice', 'photo']
 
 
+class Permission(enum.IntEnum):
+    USER = 0
+    ADMIN = 255
+
+
 class CommandType(enum.IntEnum):
     NONE = 0
     REPLY_TEXT = 1
@@ -309,7 +314,25 @@ def update_handler(method):
     return ret
 
 
-def command(type_):
+def check_permission(bot, user, min_value):
+    if min_value is None:
+        return True
+    get_permission = Promise.wrap(
+        bot.state.db.get_user_data,
+        user,
+        'permission',
+        ptype=PT.MANUAL
+    )
+    bot.queue.put(get_permission)
+    get_permission.wait()
+    value = get_permission.value
+    if not isinstance(value, int):
+        bot.logger.error('check_permission: %r', value)
+        return False
+    return value >= min_value
+
+
+def command(type_, permission=None):
     def decorator(method):
         @wraps(method)
         def ret(self, bot, update):
@@ -320,6 +343,11 @@ def command(type_):
                and not match_command_user(update.message.text,
                                           self.state.username)):
                 self.logger.info('!match_command_user %s' % update.message.text)
+                return
+
+            if not check_permission(self, update.message.from_user, permission):
+                self.logger.warning('permission denied: %s', update.message)
+                update.message.reply_text('permission denied', quote=True)
                 return
 
             try:
