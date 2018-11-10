@@ -131,6 +131,17 @@ class BotDatabase:
     def set_user_data(self, user, **fields):
         self._update_item_data('user', user.id, fields)
 
+    def get_user_by_phone(self, phone):
+        self.cursor.execute(
+            'SELECT `user_id` FROM `user_phone`'
+            'WHERE `phone_number`=? ORDER BY `timestamp` DESC LIMIT 1',
+            (phone,)
+        )
+        row = self.cursor.fetchone()
+        if row is not None:
+            row = row[0]
+        return row
+
     def get_chat_data(self, chat, fields='*'):
         return self._get_item_data(
             'chat', chat, fields,

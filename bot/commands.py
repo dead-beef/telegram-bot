@@ -121,6 +121,18 @@ class BotCommands:
             learn.catch(
                 lambda ex: self.logger.error('learn_phone: %r', ex)
             ).wait()
+        else:
+            get = Promise.wrap(
+                self.state.db.get_user_by_phone,
+                phone,
+                ptype=PT.MANUAL
+            )
+            self.queue.put(get)
+            get.catch(
+                lambda ex: self.logger.error('get: %r', ex)
+            ).wait()
+            user_id = get.value
+            self.logger.info('get: %s', get.value)
 
         return user_id
 
@@ -128,7 +140,7 @@ class BotCommands:
         user_id = self._get_user_id(msg, phone)
         if user_id is None:
             return None
-        return '[@{0} {1}](tg://user?id={0})'.format(user_id, phone)
+        return '[id{0} {1}](tg://user?id={0})'.format(user_id, phone)
 
     @update_handler
     def unknown_command(self, _, update):
