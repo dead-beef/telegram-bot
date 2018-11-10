@@ -152,6 +152,41 @@ class BotDatabase:
     def set_chat_data(self, chat, **fields):
         self._update_item_data('chat', chat.id, fields)
 
+    def get_sticker_sets(self):
+        self.cursor.execute(
+            'SELECT `id`, `title`, `name`'
+            ' FROM `sticker_set`'
+            ' ORDER BY `id` ASC'
+        )
+        return self.cursor.fetchall()
+
+    def get_sticker_set(self, set_id):
+        self.cursor.execute(
+            'SELECT `file_id`'
+            ' FROM `sticker` WHERE `set`=?'
+            ' ORDER BY `id` ASC',
+            (set_id,)
+        )
+        return self.cursor.fetchall()
+
+    def get_users(self):
+        self.cursor.execute(
+            'SELECT'
+            '  `user`.`id`,'
+            '  `user_phone`.`phone_number`,'
+            '  COALESCE(`user`.`first_name` || " " || `user`.`last_name`,'
+            '           `user`.`first_name`),'
+            '  "@" || `user`.`username`,'
+            '  `user`.`permission`'
+            ' FROM `user`'
+            ' LEFT JOIN `user_phone` ON `user`.`id`=`user_phone`.`user_id`'
+            ' ORDER BY'
+            '  `user`.`permission` DESC,'
+            '  `user`.`last_update` DESC,'
+            '  `user_phone`.`timestamp` DESC'
+        )
+        return self.cursor.fetchall()
+
     def need_sticker_set(self, name):
         self.cursor.execute(
             'SELECT COUNT(*) FROM `sticker_set` WHERE `name`=?',

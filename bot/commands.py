@@ -27,6 +27,7 @@ from .util import (
     command,
     update_handler,
     is_phone_number,
+    reply_sticker_set,
     CommandType as C,
     Permission as P
 )
@@ -34,25 +35,30 @@ from .util import (
 
 class BotCommands:
     HELP = (
-        'commands:\n'
-        '  /help - bot help\n'
-        '  /helptags - list formatter tags\n'
-        '  /helpemotes - list formatter emotes\n'
-        '  /b64 <text> - encode base64\n'
-        '  /b64d <base64> - decode base64\n'
-        '  /delprivate - delete private context\n'
-        '  /echo <text> - print text\n'
-        '  /format <text> - format text\n'
-        '  /getuser <+number> - find user\n'
-        '  /roll <dice> - roll dice\n'
-        '  /setcontext - set generator context\n'
-        '  /setlearn - set learning mode\n'
-        '  /setorder - set markov chain order\n'
-        '  /settings - print chat settings\n'
-        '  /settrigger <regexp> - set trigger\n'
-        '  /start - generate text\n'
-        '  /sticker - send random sticker\n'
-        '  /unsettrigger - remove trigger\n'
+        '/help - bot help\n'
+        '/helptags - list formatter tags\n'
+        '/helpemotes - list formatter emotes\n'
+        '\n'
+        '/setcontext - set generator context\n'
+        '/setlearn - set learning mode\n'
+        '/setorder - set markov chain order\n'
+        '/settings - print chat settings\n'
+        '/settrigger <regexp> - set trigger\n'
+        '/unsettrigger - remove trigger\n'
+        '/delprivate - delete private context\n'
+        '\n'
+        '/b64 <text> - encode base64\n'
+        '/b64d <base64> - decode base64\n'
+        '/echo <text> - print text\n'
+        '/format <text> - format text\n'
+        '/roll <dice> - roll dice\n'
+        '/start - generate text\n'
+        '/sticker - send random sticker\n'
+        '\n'
+        '/getstickers - list sticker sets\n'
+        '/getuser <+number> - get user by number\n'
+        '/getusers - list users\n'
+        '/stickerset <id> - send sticker set\n'
     )
 
     def __init__(self, bot):
@@ -277,6 +283,80 @@ class BotCommands:
         if res is None:
             res = 'not found: ' + num
         msg.reply_text(res, parse_mode=ParseMode.MARKDOWN)
+
+    @update_handler
+    @command(C.NONE, P.ADMIN)
+    def cmd_getstickers(self, _, update):
+        msg = update.message
+        get = Promise.wrap(
+            self.state.db.get_sticker_sets,
+            ptype=PT.MANUAL
+        )
+        self.queue.put(get)
+        get.wait()
+        sets = get.value
+        if not sets:
+            msg.reply_text('no sticker sets', quote=True)
+        elif isinstance(sets, Exception):
+            msg.reply_text(repr(sets), quote=True)
+        else:
+            res = '\n'.join(
+                '{0}. [{1}](https://t.me/addstickers/{2})'.format(*set_)
+                for set_ in sets
+            )
+            msg.reply_text(res, quote=True, parse_mode=ParseMode.MARKDOWN)
+
+    @update_handler
+    @command(C.NONE, P.ADMIN)
+    def cmd_getusers(self, _, update):
+        msg = update.message
+        get = Promise.wrap(
+            self.state.db.get_users,
+            ptype=PT.MANUAL
+        )
+        self.queue.put(get)
+        get.wait()
+        users = get.value
+        if not users:
+            msg.reply_text('no users', quote=True)
+        elif isinstance(users, Exception):
+            msg.reply_text(repr(users), quote=True)
+        else:
+            res = '\n'.join(
+                '{0}. ({5}) <a href="tg://user?id={1}">{1}</a> {2} {3} {4}'
+                .format(
+                    i + 1,
+                    user[0],
+                    user[1] or '&lt;no phone&gt;',
+                    user[2] or '&lt;no name&gt;',
+                    user[3] or '&lt;no username&gt;',
+                    user[4]
+                )
+                for i, user in enumerate(users)
+            )
+            msg.reply_text(res, quote=True, parse_mode=ParseMode.HTML)
+
+    @update_handler
+    @command(C.NONE, P.ADMIN)
+    def cmd_stickerset(self, _, update):
+        msg = update.message
+        set_id = get_command_args(msg.text, help='usage: /stickerset <id>')
+        set_id = int(set_id)
+
+        get = Promise.wrap(
+            self.state.db.get_sticker_set,
+            set_id,
+            ptype=PT.MANUAL
+        )
+        self.queue.put(get)
+        get.wait()
+        stickers = get.value
+        if not stickers:
+            msg.reply_text('not found', quote=True)
+        elif isinstance(stickers, Exception):
+            msg.reply_text(repr(stickers), quote=True)
+        else:
+            self.state.run_async(reply_sticker_set, update, stickers)
 
     @update_handler
     @command(C.REPLY_TEXT)

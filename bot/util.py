@@ -4,12 +4,18 @@ import enum
 import logging
 import subprocess
 import unicodedata
+from time import sleep
 from functools import wraps
 from itertools import chain
 from html.parser import HTMLParser
 
 import dice
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ChatAction,
+    TelegramError
+)
 
 from .error import BotError, CommandError
 from .promise import Promise, PromiseType as PT
@@ -255,6 +261,17 @@ def reply_sticker(update, msg, quote=False):
         msg, quote = msg
     update.message.reply_sticker(sticker=msg, quote=quote)
 
+def reply_sticker_set(update, stickers, quote=False):
+    for sticker in stickers:
+        try:
+            update.message.bot.send_chat_action(
+                update.message.chat_id,
+                ChatAction.TYPING
+            )
+        except TelegramError:
+            pass
+        sleep(0.5)
+        update.message.reply_sticker(sticker=sticker[0], quote=quote)
 
 def reply_photo(update, img, quote=False):
     if isinstance(img, str):
