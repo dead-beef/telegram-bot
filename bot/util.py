@@ -355,17 +355,20 @@ def command(type_, permission=None):
         def ret(self, bot, update):
             self.logger.info('command %s', method.__name__)
 
-            if(update.message
-               and update.message.text
-               and not match_command_user(update.message.text,
-                                          self.state.username)):
-                self.logger.info('!match_command_user %s' % update.message.text)
-                return
+            if update.message is not None:
+                if(update.message.text
+                   and not match_command_user(update.message.text,
+                                              self.state.username)):
+                    self.logger.info('!match_command_user %s'
+                                     % update.message.text)
+                    return
 
-            if not check_permission(self, update.message.from_user, permission):
-                self.logger.warning('permission denied: %s', update.message)
-                update.message.reply_text('permission denied', quote=True)
-                return
+                if not check_permission(self,
+                                        update.message.from_user,
+                                        permission):
+                    self.logger.warning('permission denied: %s', update.message)
+                    update.message.reply_text('permission denied', quote=True)
+                    return
 
             try:
                 res = method(self, bot, update)
