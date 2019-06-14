@@ -30,7 +30,7 @@ setup(name='telegram-bot',
           'enum34',
           'python-telegram-bot',
           'pysocks',
-          'markovchain>=0.2.3',
+          'markovchain>=0.2.5',
           'dice'
       ],
       extras_require={
