@@ -269,7 +269,11 @@ class BotState:
             quote = True
             reply = True
         elif text:
-            if self.username in text:
+            if text.strip().startswith('/image'):
+                self.logger.info('image command: reply=True')
+                quote = True
+                reply = True
+            elif self.username in text:
                 self.logger.info('username in message text: reply=True')
                 quote = True
                 reply = True

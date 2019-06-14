@@ -27,6 +27,7 @@ from .util import (
     get_command_args,
     command,
     update_handler,
+    download_file,
     is_phone_number,
     reply_sticker_set,
     CommandType as C,
@@ -55,6 +56,7 @@ class BotCommands:
         '/eval <expression> - evaluate expression\n'
         '/roll <dice> - roll dice\n'
         '/start - generate text\n'
+        '/image - generate image\n'
         '/sticker - send random sticker\n'
         '\n'
         '/getstickers - list sticker sets\n'
@@ -205,6 +207,21 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def cmd_start(self, *_):
         return self.state.random_text
+
+    @update_handler
+    @command(C.REPLY_TEXT)
+    def cmd_image(self, _, update):
+        msg = update.message
+        if msg.photo:
+            pass
+        elif msg.reply_to_message and msg.reply_to_message.photo:
+            msg = msg.reply_to_message
+        else:
+            update.message.reply_text('no input image')
+            return
+        deferred = Promise.defer()
+        download_file(msg, self.state.file_dir, deferred)
+        return partial(self.state.on_photo, deferred)
 
     @update_handler
     @command(C.REPLY_STICKER)
