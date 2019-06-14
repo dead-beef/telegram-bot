@@ -46,6 +46,7 @@ class BotCommands:
         '/setorder - set markov chain order\n'
         '/settings - print chat settings\n'
         '/settrigger <regexp> - set trigger\n'
+        '/setreplylength <words> - set max reply length\n'
         '/unsettrigger - remove trigger\n'
         '/delprivate - delete private context\n'
         '\n'
@@ -432,6 +433,11 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def cmd_settrigger(self, *_):
         return self.state.set_trigger
+
+    @update_handler
+    @command(C.REPLY_TEXT)
+    def cmd_setreplylength(self, *_):
+        return self.state.set_reply_length
 
     @update_handler
     @command(C.REPLY_TEXT)

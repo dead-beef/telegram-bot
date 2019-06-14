@@ -255,6 +255,19 @@ class BotState:
         self.db.set_chat_data(update.message.chat, trigger=None)
         return 'trigger: %s -> None' % prev
 
+    def set_reply_length(self, update):
+        message = update.message
+        length = strip_command(message.text)
+        if not length:
+            raise CommandError('usage: /setreplylength <number>')
+        try:
+            length = max(8, min(int(length), 256))
+        except ValueError as ex:
+            raise CommandError(ex)
+        prev = self.db.get_chat_data(message.chat, 'reply_max_length')
+        self.db.set_chat_data(message.chat, reply_max_length=length)
+        return 'max reply length: %d -> %d' % (prev, length)
+
     def _need_reply(self, message):
         reply = False
         quote = False
@@ -287,16 +300,16 @@ class BotState:
         return reply, quote
 
     def random_text(self, update):
-        context, order = self.db.get_chat_data(
+        context, order, length = self.db.get_chat_data(
             update.message.chat,
-            '`context`,`order`'
+            '`context`,`order`,`reply_max_length`'
         )
         if context is None:
             self.logger.info('no context')
             raise CommandError('generator context is not set')
         context = self.context.get(context)
         try:
-            return context.random_text(order), True
+            return context.random_text(order, length), True
         except KeyError as ex:
             self.logger.error(ex)
             return None
@@ -334,9 +347,9 @@ class BotState:
         message = update.message
         reply, quote = self._need_reply(message)
 
-        context, order, learn = self.db.get_chat_data(
+        context, order, learn, length = self.db.get_chat_data(
             message.chat,
-            '`context`,`order`,`learn`'
+            '`context`,`order`,`learn`,`reply_max_length`'
         )
 
         context = self.context.get(context)
@@ -351,7 +364,7 @@ class BotState:
         if context is not None:
             if reply:
                 try:
-                    reply = context.reply_text(text, order)
+                    reply = context.reply_text(text, order, length)
                     self.logger.info('reply: "%s"', reply)
                     if reply:
                         res = (reply, quote)

@@ -29,6 +29,7 @@ class BotDatabase:
         '  `context` TEXT,'
         '  `order` INTEGER,'
         '  `learn` BOOLEAN NOT NULL DEFAULT 0,'
+        '  `reply_max_length` INTEGER NOT NULL DEFAULT 64,'
         '  `trigger` TEXT,'
         '  `last_update` INTEGER NOT NULL DEFAULT 0'
         ')',

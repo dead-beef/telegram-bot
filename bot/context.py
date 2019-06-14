@@ -34,12 +34,13 @@ class Context:
     def get_orders(self):
         return self.markov.parser.state_sizes
 
-    def random_text(self, order):
-        return self.markov(state_size=order)
+    def random_text(self, order, max_length):
+        return self.markov(state_size=order, max_length=max_length)
 
-    def reply_text(self, text, order):
+    def reply_text(self, text, order, max_length):
         return self.markov(
             state_size=order,
+            max_length=max_length,
             reply_to=text,
             reply_mode=ReplyMode.REPLY
         )
