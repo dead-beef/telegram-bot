@@ -21,7 +21,7 @@ from .util import (
     get_chat_title,
     get_message_filename,
     update_handler,
-    get_file,
+    download_file,
     command,
     CommandType as C
 )
@@ -212,24 +212,6 @@ class Bot:
     def on_error(self, _, update, error):
         self.logger.error('update "%s" caused error "%s"', update, error)
 
-    @run_async
-    def download(self, message, deferred=None):
-        try:
-            ftype, fid = get_file(message)
-            fdir = self.state.file_dir[ftype]
-            fname = os.path.join(fdir, get_message_filename(message))
-            self.logger.info('download %s -> %s', ftype, fname)
-            self.updater.bot.get_file(fid).download(fname)
-            self.logger.info('download complete: %s -> %s', ftype, fname)
-        except BaseException as ex:
-            self.logger.error('download error: %s -> %s: %r', ftype, fname, ex)
-            if deferred is not None:
-                deferred.reject(ex)
-            raise
-        else:
-            if deferred is not None:
-                deferred.resolve(fname)
-
     @update_handler
     def on_inline(self, bot, update):
         self.commands.inline_query(bot, update)
@@ -269,7 +251,7 @@ class Bot:
     @command(C.REPLY_TEXT)
     def on_photo(self, _, update):
         deferred = Promise.defer()
-        self.download(update.message, deferred)
+        download_file(update.message, self.state.file_dir, deferred)
         return partial(self.state.on_photo, deferred)
 
     @update_handler
@@ -293,9 +275,9 @@ class Bot:
     @update_handler
     @command(C.REPLY_TEXT)
     def on_voice(self, _, update):
-        self.download(update.message)
+        download_file(update.message, self.state.file_dir)
         return self.state.on_voice
 
     @update_handler
     def on_file(self, _, update):
-        self.download(update.message)
+        download_file(update.message, self.state.file_dir)

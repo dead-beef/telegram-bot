@@ -16,6 +16,7 @@ from telegram import (
     ChatAction,
     TelegramError
 )
+from telegram.ext import run_async
 
 from .error import BotError, CommandError
 from .promise import Promise, PromiseType as PT
@@ -229,8 +230,28 @@ def get_file(message):
             if type_ == 'photo':
                 data = data[-1]
             return type_, data.file_id
-    raise ValueError('%r: file not found', message)
+    raise ValueError('%r: file not found' % message)
 
+@run_async
+def download_file(message, dirs, deferred=None, overwrite=False):
+    try:
+        ftype, fid = get_file(message)
+        fdir = dirs[ftype]
+        fname = os.path.join(fdir, get_message_filename(message))
+        if os.path.exists(fname) and not overwrite:
+            LOGGER.info('%s file exists: %s', ftype, fname)
+        else:
+            LOGGER.info('download %s -> %s', ftype, fname)
+            message.bot.get_file(fid).download(fname)
+            LOGGER.info('download complete: %s -> %s', ftype, fname)
+    except BaseException as ex:
+        LOGGER.error('download error: %s -> %s: %r', ftype, fname, ex)
+        if deferred is not None:
+            deferred.reject(ex)
+        raise
+    else:
+        if deferred is not None:
+            deferred.resolve(fname)
 
 def reply_text(update, msg, quote=False):
     if not msg:
