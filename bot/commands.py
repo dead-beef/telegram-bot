@@ -20,6 +20,7 @@ from telegram.ext import (
     Filters
 )
 
+from .safe_eval import safe_eval
 from .error import CommandError
 from .promise import Promise, PromiseType as PT
 from .util import (
@@ -51,6 +52,7 @@ class BotCommands:
         '/b64d <base64> - decode base64\n'
         '/echo <text> - print text\n'
         '/format <text> - format text\n'
+        '/eval <expression> - evaluate expression\n'
         '/roll <dice> - roll dice\n'
         '/start - generate text\n'
         '/sticker - send random sticker\n'
@@ -253,6 +255,15 @@ class BotCommands:
                                help='usage: /format <text>')
         msg = self.state.formatter.format(msg)
         update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_eval(self, _, update):
+        msg = get_command_args(update.message.text,
+                               help='usage: /eval <expression>')
+        msg = safe_eval(msg)
+        msg = re.sub(r'\.?0+$', '', '%.04f' % msg)
+        update.message.reply_text(msg, quote=True)
 
     @update_handler
     @command(C.NONE)
