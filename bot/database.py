@@ -5,7 +5,7 @@ import sqlite3
 import logging
 
 from .error import CommandError
-from .util import get_file, get_message_filename
+from .util import get_file, get_message_filename, Permission as P
 
 
 class BotDatabase:
@@ -177,26 +177,44 @@ class BotDatabase:
         )
         return self.cursor.fetchall()
 
-    def get_users(self, page):
+    def get_users(self, page, permission):
         page = max(page - 1, 0)
         page_size = 25
         self.cursor.execute('SELECT COUNT(*) FROM `user`')
         pages = math.ceil(self.cursor.fetchone()[0] / page_size)
+        if permission >= P.ADMIN:
+            query = (
+                'SELECT'
+                '  `user`.`id`,'
+                '  `user_phone`.`phone_number`,'
+                '  COALESCE(`user`.`first_name` || " " || `user`.`last_name`,'
+                '           `user`.`first_name`),'
+                '  "@" || `user`.`username`,'
+                '  `user`.`permission`'
+                ' FROM `user`'
+                ' LEFT JOIN `user_phone` ON `user`.`id`=`user_phone`.`user_id`'
+                ' ORDER BY'
+                '  `user`.`permission` DESC,'
+                '  `user`.`last_update` DESC,'
+                '  `user_phone`.`timestamp` DESC'
+                ' LIMIT ? OFFSET ?'
+            )
+        else:
+            query = (
+                'SELECT'
+                '  `id`, "--",'
+                '  COALESCE(`user`.`first_name` || " " || `user`.`last_name`,'
+                '           `user`.`first_name`),'
+                '  "@" || `username`,'
+                '  `permission`'
+                ' FROM `user`'
+                ' ORDER BY'
+                '  `user`.`permission` DESC,'
+                '  `user`.`last_update` DESC'
+                ' LIMIT ? OFFSET ?'
+            )
         self.cursor.execute(
-            'SELECT'
-            '  `user`.`id`,'
-            '  `user_phone`.`phone_number`,'
-            '  COALESCE(`user`.`first_name` || " " || `user`.`last_name`,'
-            '           `user`.`first_name`),'
-            '  "@" || `user`.`username`,'
-            '  `user`.`permission`'
-            ' FROM `user`'
-            ' LEFT JOIN `user_phone` ON `user`.`id`=`user_phone`.`user_id`'
-            ' ORDER BY'
-            '  `user`.`permission` DESC,'
-            '  `user`.`last_update` DESC,'
-            '  `user_phone`.`timestamp` DESC'
-            ' LIMIT ? OFFSET ?',
+            query,
             (page_size, page * page_size)
         )
         return self.cursor.fetchall(), pages

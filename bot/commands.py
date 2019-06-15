@@ -316,7 +316,7 @@ class BotCommands:
         msg.reply_text(res, parse_mode=ParseMode.MARKDOWN)
 
     @update_handler
-    @command(C.REPLY_TEXT_PAGINATED, P.ADMIN)
+    @command(C.REPLY_TEXT_PAGINATED)
     def cmd_getusers(self, _, update):
         return self.state.list_users
 

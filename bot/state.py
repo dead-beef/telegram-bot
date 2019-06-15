@@ -363,7 +363,11 @@ class BotState:
             page = int(update.callback_query.data)
         else:
             page = 1
-        users, pages = self.db.get_users(page)
+        if update.effective_chat.type != update.effective_message.chat.PRIVATE:
+            permission = 0
+        else:
+            permission = self.db.get_user_data(update.effective_user, 'permission')
+        users, pages = self.db.get_users(page, permission)
         if not users:
             return 'no users', 1, True
         offset = 25 * (page - 1)
