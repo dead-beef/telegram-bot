@@ -1,5 +1,6 @@
 import os
 import time
+import math
 import sqlite3
 import logging
 
@@ -153,13 +154,19 @@ class BotDatabase:
     def set_chat_data(self, chat, **fields):
         self._update_item_data('chat', chat.id, fields)
 
-    def get_sticker_sets(self):
+    def get_sticker_sets(self, page=1):
+        page = max(page - 1, 0)
+        page_size = 50
+        self.cursor.execute('SELECT COUNT(*) FROM `sticker_set`')
+        pages = math.ceil(self.cursor.fetchone()[0] / page_size)
         self.cursor.execute(
             'SELECT `id`, `title`, `name`'
             ' FROM `sticker_set`'
             ' ORDER BY `id` ASC'
+            ' LIMIT ? OFFSET ?',
+            (page_size, page * page_size)
         )
-        return self.cursor.fetchall()
+        return self.cursor.fetchall(), pages
 
     def get_sticker_set(self, set_id):
         self.cursor.execute(
@@ -170,7 +177,11 @@ class BotDatabase:
         )
         return self.cursor.fetchall()
 
-    def get_users(self):
+    def get_users(self, page):
+        page = max(page - 1, 0)
+        page_size = 25
+        self.cursor.execute('SELECT COUNT(*) FROM `user`')
+        pages = math.ceil(self.cursor.fetchone()[0] / page_size)
         self.cursor.execute(
             'SELECT'
             '  `user`.`id`,'
@@ -185,8 +196,10 @@ class BotDatabase:
             '  `user`.`permission` DESC,'
             '  `user`.`last_update` DESC,'
             '  `user_phone`.`timestamp` DESC'
+            ' LIMIT ? OFFSET ?',
+            (page_size, page * page_size)
         )
-        return self.cursor.fetchall()
+        return self.cursor.fetchall(), pages
 
     def need_sticker_set(self, name):
         self.cursor.execute(

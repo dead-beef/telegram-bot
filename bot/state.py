@@ -8,7 +8,7 @@ import subprocess
 from collections import defaultdict
 from threading import Lock
 
-from telegram import ChatAction, TelegramError
+from telegram import ChatAction, TelegramError, ParseMode
 from telegram.ext import Dispatcher
 
 from .util import (
@@ -342,6 +342,45 @@ class BotState:
         ).catch(
             lambda err: reply_text(update, err, quote)
         ).wait()
+
+    def list_sticker_sets(self, update):
+        if update.callback_query:
+            page = int(update.callback_query.data)
+        else:
+            page = 1
+        sets, pages = self.db.get_sticker_sets(page)
+        if pages <= 1:
+            return 'no sticker sets', 1
+        res = '\n'.join(
+            '{0}. [{1}](https://t.me/addstickers/{2})'.format(*set_)
+            for set_ in sets
+        )
+        res = 'sticker sets page %d / %d:\n%s' % (page, pages, res)
+        return res, pages, True, ParseMode.MARKDOWN
+
+    def list_users(self, update):
+        if update.callback_query:
+            page = int(update.callback_query.data)
+        else:
+            page = 1
+        users, pages = self.db.get_users(page)
+        if not users:
+            return 'no users', 1, True
+        offset = 25 * (page - 1)
+        res = '\n'.join(
+            '{0}. ({5}) <a href="tg://user?id={1}">{1}</a> {2} {3} {4}'
+            .format(
+                i + 1 + offset,
+                user[0],
+                user[1] or '&lt;no phone&gt;',
+                user[2] or '&lt;no name&gt;',
+                user[3] or '&lt;no username&gt;',
+                user[4]
+            )
+            for i, user in enumerate(users)
+        )
+        res = 'users page %d / %d:\n%s' % (page, pages, res)
+        return res, pages, True, ParseMode.HTML
 
     def on_text(self, update):
         message = update.message

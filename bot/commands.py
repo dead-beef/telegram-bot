@@ -151,7 +151,9 @@ class BotCommands:
         cmd = msg.text
         has_cmd = False
 
-        for pattern in (r'^select\s+(.+)$', r'^([^\'"]+[^\s\'"]).*\?$'):
+        for pattern in (r'^select\s+(.+)$',
+                        r'^(.+[^\s])\s+page',
+                        r'^([^\'"]+[^\s\'"]).*\?$'):
             match = re.match(pattern, msg.text, re.I)
             if match is not None:
                 has_cmd = True
@@ -314,56 +316,14 @@ class BotCommands:
         msg.reply_text(res, parse_mode=ParseMode.MARKDOWN)
 
     @update_handler
-    @command(C.NONE, P.ADMIN)
-    def cmd_getstickers(self, _, update):
-        msg = update.message
-        get = Promise.wrap(
-            self.state.db.get_sticker_sets,
-            ptype=PT.MANUAL
-        )
-        self.queue.put(get)
-        get.wait()
-        sets = get.value
-        if not sets:
-            msg.reply_text('no sticker sets', quote=True)
-        elif isinstance(sets, Exception):
-            msg.reply_text(repr(sets), quote=True)
-        else:
-            res = '\n'.join(
-                '{0}. [{1}](https://t.me/addstickers/{2})'.format(*set_)
-                for set_ in sets
-            )
-            msg.reply_text(res, quote=True, parse_mode=ParseMode.MARKDOWN)
+    @command(C.REPLY_TEXT_PAGINATED, P.ADMIN)
+    def cmd_getusers(self, _, update):
+        return self.state.list_users
 
     @update_handler
-    @command(C.NONE, P.ADMIN)
-    def cmd_getusers(self, _, update):
-        msg = update.message
-        get = Promise.wrap(
-            self.state.db.get_users,
-            ptype=PT.MANUAL
-        )
-        self.queue.put(get)
-        get.wait()
-        users = get.value
-        if not users:
-            msg.reply_text('no users', quote=True)
-        elif isinstance(users, Exception):
-            msg.reply_text(repr(users), quote=True)
-        else:
-            res = '\n'.join(
-                '{0}. ({5}) <a href="tg://user?id={1}">{1}</a> {2} {3} {4}'
-                .format(
-                    i + 1,
-                    user[0],
-                    user[1] or '&lt;no phone&gt;',
-                    user[2] or '&lt;no name&gt;',
-                    user[3] or '&lt;no username&gt;',
-                    user[4]
-                )
-                for i, user in enumerate(users)
-            )
-            msg.reply_text(res, quote=True, parse_mode=ParseMode.HTML)
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cb_users(self, _, update):
+        return self.state.list_users
 
     @update_handler
     @command(C.NONE, P.ADMIN)
@@ -386,6 +346,16 @@ class BotCommands:
             msg.reply_text(repr(stickers), quote=True)
         else:
             self.state.run_async(reply_sticker_set, update, stickers)
+
+    @update_handler
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cmd_getstickers(self, *_):
+        return self.state.list_sticker_sets
+
+    @update_handler
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cb_sticker_sets(self, *_):
+        return self.state.list_sticker_sets
 
     @update_handler
     @command(C.REPLY_TEXT)

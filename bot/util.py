@@ -14,7 +14,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ChatAction,
-    TelegramError
+    TelegramError,
+    ParseMode
 )
 from telegram.ext import run_async
 
@@ -58,6 +59,7 @@ class CommandType(enum.IntEnum):
     REPLY_STICKER = 2
     GET_OPTIONS = 3
     SET_OPTION = 4
+    REPLY_TEXT_PAGINATED = 5
 
 
 class HTMLFlattenParser(HTMLParser):
@@ -253,12 +255,15 @@ def download_file(message, dirs, deferred=None, overwrite=False):
         if deferred is not None:
             deferred.resolve(fname)
 
-def reply_text(update, msg, quote=False):
+def reply_text(update, msg, quote=False, parse_mode=None):
     if not msg:
         return
 
-    if isinstance(msg, tuple) and len(msg) == 2:
-        msg, quote = msg
+    if isinstance(msg, tuple):
+        if len(msg) == 2:
+            msg, quote = msg
+        elif len(msg) == 3:
+            msg, quote, parse_mode = msg
 
     if isinstance(msg, Exception):
         quote = True
@@ -272,8 +277,41 @@ def reply_text(update, msg, quote=False):
         else:
             msg = repr(msg)
 
-    update.message.reply_text(msg, quote=quote)
+    update.message.reply_text(msg, quote=quote, parse_mode=parse_mode)
 
+def reply_text_paginated(update, msg, quote=False, parse_mode=None):
+    pages = 1
+    if isinstance(msg, tuple):
+        if len(msg) == 2:
+            msg, pages = msg
+        elif len(msg) == 3:
+            msg, pages, quote = msg
+        elif len(msg) == 4:
+            msg, pages, quote, parse_mode = msg
+
+    if pages <= 1:
+        return reply_text(update, msg, quote, parse_mode)
+
+    keyboard = [
+        InlineKeyboardButton(str(value), callback_data=value)
+        for value in range(1, pages + 1)
+    ]
+    keyboard = list(chunks(keyboard, 4))
+    markup = InlineKeyboardMarkup(keyboard)
+    if update.callback_query:
+        update.callback_query.message.edit_text(
+            msg,
+            parse_mode=parse_mode,
+            reply_markup=markup
+        )
+        update.bot.answer_callback_query(update.callback_query.id, text='')
+    else:
+        update.message.reply_text(
+            msg,
+            quote=quote,
+            parse_mode=parse_mode,
+            reply_markup=markup
+        )
 
 def reply_sticker(update, msg, quote=False):
     if not msg:
@@ -400,20 +438,22 @@ def command(type_, permission=None):
                 update.message.reply_text(repr(ex), quote=True)
                 raise
 
+            on_resolve = lambda msg: reply_text(update, msg, True)
+            on_reject = on_resolve
+
             if type_ == CommandType.NONE:
                 return res
             elif type_ == CommandType.REPLY_TEXT:
-                on_resolve = lambda msg: reply_text(update, msg, True)
-                on_reject = on_resolve
+                pass
             elif type_ == CommandType.REPLY_STICKER:
                 on_resolve = lambda msg: reply_sticker(update, msg, True)
-                on_reject = lambda msg: reply_text(update, msg, True)
             elif type_ == CommandType.GET_OPTIONS:
                 on_resolve = lambda res: reply_keyboard(update, res)
-                on_reject = lambda msg: reply_text(update, msg, True)
             elif type_ == CommandType.SET_OPTION:
                 on_resolve = lambda msg: reply_callback_query(update, msg)
                 on_reject = on_resolve
+            elif type_ == CommandType.REPLY_TEXT_PAGINATED:
+                on_resolve = lambda msg: reply_text_paginated(update, msg, True)
             else:
                 raise ValueError('invalid command type: %s' % type_)
 
