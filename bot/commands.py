@@ -148,17 +148,26 @@ class BotCommands:
     @update_handler
     def callback_query(self, bot, update):
         msg = update.callback_query.message
-        cmd = msg.text
+        cmd = None
         has_cmd = False
 
-        for pattern in (r'^select\s+(.+)$',
-                        r'^(.+[^\s])\s+page',
-                        r'^([^\'"]+[^\s\'"]).*\?$'):
-            match = re.match(pattern, msg.text, re.I)
-            if match is not None:
+        if msg.text:
+            for pattern in (r'^select\s+(.+)$',
+                            r'^(.+[^\s])\s+page',
+                            r'^([^\'"]+[^\s\'"]).*\?$'):
+                match = re.match(pattern, msg.text, re.I)
+                if match is not None:
+                    has_cmd = True
+                    cmd = 'cb_' + match.group(1).replace(' ', '_')
+                    break
+
+        match = re.match(r'^([a-z_]+)\s*(.*)', update.callback_query.data)
+        if match is not None:
+            cmd_ = 'cb_' + match.group(1)
+            if hasattr(self, cmd_):
+                cmd = cmd_
                 has_cmd = True
-                cmd = 'cb_' + match.group(1).replace(' ', '_')
-                break
+                update.callback_query.data = match.group(2)
 
         if has_cmd:
             try:
