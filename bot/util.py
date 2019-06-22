@@ -186,10 +186,16 @@ def strip_command(string):
 def get_command_args(msg, nargs=1, help='missing command argument'):
     if nargs != 1:
         raise NotImplementedError('get_command_args nargs != 1')
-    msg = strip_command(msg)
-    if not msg:
-        raise CommandError(help)
-    return msg
+    while True:
+        args = get_message_text(msg)
+        if args:
+            args = strip_command(args)
+        if args:
+            return args
+        elif msg.reply_to_message:
+            msg = msg.reply_to_message
+        else:
+            raise CommandError(help)
 
 def match_command_user(cmd, username):
     match = RE_COMMAND_USERNAME.match(cmd)

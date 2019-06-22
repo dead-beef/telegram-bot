@@ -261,15 +261,13 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cmd_echo(self, bot, update):
-        msg = get_command_args(update.message.text,
-                               help='usage: /echo <text>')
+        msg = get_command_args(update.message, help='usage: /echo <text>')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
 
     @update_handler
     @command(C.NONE)
     def cmd_roll(self, _, update):
-        msg = get_command_args(update.message.text,
-                               help='usage: /roll <dice>')
+        msg = get_command_args(update.message, help='usage: /roll <dice>')
         roll = int(dice.roll(msg))
         update.message.reply_text(
             '<i>%s</i> → <b>%s</b>' % (msg, roll),
@@ -280,16 +278,14 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cmd_format(self, _, update):
-        msg = get_command_args(update.message.text,
-                               help='usage: /format <text>')
+        msg = get_command_args(update.message, help='usage: /format <text>')
         msg = self.state.formatter.format(msg)
         update.message.reply_text(msg, parse_mode=ParseMode.HTML)
 
     @update_handler
     @command(C.NONE)
     def cmd_eval(self, _, update):
-        msg = get_command_args(update.message.text,
-                               help='usage: /eval <expression>')
+        msg = get_command_args(update.message, help='usage: /eval <expression>')
         msg = safe_eval(msg)
         msg = re.sub(r'\.?0+$', '', '%.04f' % msg)
         update.message.reply_text(msg, quote=True)
@@ -297,16 +293,14 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cmd_b64(self, _, update):
-        msg = get_command_args(update.message.text,
-                               help='usage: /b64 <text>')
+        msg = get_command_args(update.message, help='usage: /b64 <text>')
         msg = b64encode(msg.encode('utf-8')).decode('ascii')
         update.message.reply_text(msg, quote=True)
 
     @update_handler
     @command(C.NONE)
     def cmd_b64d(self, bot, update):
-        msg = get_command_args(update.message.text,
-                               help='usage: /b64d <base64>')
+        msg = get_command_args(update.message, help='usage: /b64d <base64>')
         msg = b64decode(msg.encode('utf-8'), validate=True).decode('utf-8')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
 
@@ -314,8 +308,7 @@ class BotCommands:
     @command(C.NONE, P.ADMIN)
     def cmd_getuser(self, _, update):
         msg = update.message
-        num = get_command_args(update.message.text,
-                               help='usage: /getuser <number>')
+        num = get_command_args(update.message, help='usage: /getuser <number>')
         if not is_phone_number(num):
             raise CommandError('invalid phone number')
 
@@ -338,7 +331,7 @@ class BotCommands:
     @command(C.NONE, P.ADMIN)
     def cmd_stickerset(self, _, update):
         msg = update.message
-        set_id = get_command_args(msg.text, help='usage: /stickerset <id>')
+        set_id = get_command_args(msg, help='usage: /stickerset <id>')
         set_id = int(set_id)
 
         get = Promise.wrap(
