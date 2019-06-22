@@ -221,6 +221,15 @@ def get_chat_title(chat):
         str(chat.last_name)
     )
 
+def get_user_name(user):
+    if user.username:
+        return '@' + user.username
+    if user.first_name or user.last_name:
+        return ' '.join(
+            s for s in (user.first_name, user.last_name) if s
+        )
+    return str(user.id)
+
 def get_message_filename(message):
     return '%s_%s_%s' % (
         message.chat.id,
@@ -285,7 +294,7 @@ def reply_text(update, msg, quote=False, parse_mode=None):
 
     update.message.reply_text(msg, quote=quote, parse_mode=parse_mode)
 
-def reply_text_paginated(update, msg, quote=False, parse_mode=None):
+def reply_text_paginated(update, msg, quote=False, parse_mode=None, disable_notification=False):
     pages = 1
     if isinstance(msg, tuple):
         if len(msg) == 2:
@@ -308,14 +317,15 @@ def reply_text_paginated(update, msg, quote=False, parse_mode=None):
         update.callback_query.message.edit_text(
             msg,
             parse_mode=parse_mode,
+            disable_notification=disable_notification,
             reply_markup=markup
         )
-        update.bot.answer_callback_query(update.callback_query.id, text='')
     else:
         update.message.reply_text(
             msg,
             quote=quote,
             parse_mode=parse_mode,
+            disable_notification=disable_notification,
             reply_markup=markup
         )
 

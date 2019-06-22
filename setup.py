@@ -31,7 +31,8 @@ setup(name='telegram-bot',
           'python-telegram-bot',
           'pysocks',
           'markovchain>=0.2.5',
-          'dice'
+          'dice',
+          'urllib3[socks]'
       ],
       extras_require={
           'dev': [

@@ -1,30 +1,41 @@
 import re
+import math
+import html
 import logging
 
 from uuid import uuid4
+from itertools import islice
 from functools import partial
+from collections import deque
 from base64 import b64encode, b64decode
 
 import dice
 
 from telegram import (
+    ChatAction,
+    TelegramError,
     ParseMode,
     InlineQueryResultArticle,
-    InputTextMessageContent
+    InputTextMessageContent,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
 )
-
 from telegram.ext import (
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
     Filters
 )
+from telegram.error import BadRequest
 
 from .safe_eval import safe_eval
 from .error import CommandError
 from .promise import Promise, PromiseType as PT
 from .util import (
+    remove_control_chars,
+    reply_text_paginated,
     get_command_args,
+    get_user_name,
     command,
     update_handler,
     download_file,
@@ -56,6 +67,8 @@ class BotCommands:
         '/format <text> - format text\n'
         '/eval <expression> - evaluate expression\n'
         '/roll <dice> - roll dice\n'
+        '/pic <query> - image search\n'
+        '/piclog - show image search log\n'
         '/start - generate text\n'
         '/image - generate image\n'
         '/sticker - send random sticker\n'
@@ -66,6 +79,9 @@ class BotCommands:
         '/stickerset <id> - send sticker set\n'
     )
 
+    SEARCH_LOG_MAX_SIZE = 50
+    SEARCH_LOG_PAGE_SIZE = 10
+
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
         self.state = bot.state
@@ -73,6 +89,7 @@ class BotCommands:
         self.formatter_emotes = self.state.formatter.list_emotes()
         self.queue = bot.queue
         self.stopped = bot.stopped
+        self.search_log = deque(maxlen=self.SEARCH_LOG_MAX_SIZE)
         dispatcher = bot.updater.dispatcher
         for field in dir(self):
             if field.startswith('cmd_'):
@@ -136,6 +153,56 @@ class BotCommands:
         if user_id is None:
             return None
         return '[id{0} {1}](tg://user?id={0})'.format(user_id, phone)
+
+    def _search(self, update, query):
+        if update.callback_query:
+            user = update.callback_query.from_user
+        else:
+            user = update.message.from_user
+        self.search_log.appendleft('%s (<a href="tg://user?id=%s">%s</a>)' % (
+            html.escape(query), user.id, html.escape(get_user_name(user))
+        ))
+
+        chat_id = update.effective_chat.id
+        if update.message:
+            reply_to = update.message.message_id
+            bot = update.message.bot
+        else:
+            reply_to = None
+            bot = update.callback_query.bot
+
+        try:
+            bot.send_chat_action(chat_id, ChatAction.UPLOAD_PHOTO)
+        except TelegramError as ex:
+            self.logger.error('send_chat_action: %r', ex)
+
+        while True:
+            try:
+                res = self.state.search(query)
+            except Exception as ex:
+                bot.send_message(
+                    chat_id, repr(ex), quote=True,
+                    reply_to_message_id=reply_to
+                )
+                return
+            else:
+                keyboard = [[
+                    InlineKeyboardButton('\U0001f517 %d' % (res.offset + 1),
+                                         url=res.url),
+                    InlineKeyboardButton('next', callback_data='pic ' + query)
+                ]]
+                try:
+                    bot.send_photo(
+                        chat_id,
+                        res.image,
+                        caption=query,
+                        quote=True,
+                        reply_to_message_id=reply_to,
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return
+                except BadRequest:
+                    self.logger.info('image post failed: %r', res)
 
     @update_handler
     def unknown_command(self, _, update):
@@ -219,6 +286,43 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def cmd_start(self, *_):
         return self.state.random_text
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_pic(self, _, update):
+        query = get_command_args(update.message, help='usage: /pic <query>')
+        query = remove_control_chars(query).replace('\n', ' ')
+        self.state.run_async(self._search, update, query)
+
+    @update_handler
+    @command(C.NONE)
+    def cb_pic(self, _, update):
+        query = remove_control_chars(update.callback_query.data)
+        self.state.run_async(self._search, update, query)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_piclog(self, _, update):
+        pages = math.ceil(len(self.search_log) / self.SEARCH_LOG_PAGE_SIZE)
+        text = 'pic log page 1 / %s:\n' % pages
+        text += '\n'.join(islice(self.search_log, 0, self.SEARCH_LOG_PAGE_SIZE))
+        reply_text_paginated(update, (text, pages),
+                             quote=True, disable_notification=True,
+                             parse_mode=ParseMode.HTML)
+
+    @update_handler
+    @command(C.NONE)
+    def cb_pic_log(self, _, update):
+        pages = math.ceil(len(self.search_log) / self.SEARCH_LOG_PAGE_SIZE)
+        page = int(update.callback_query.data)
+        offset = (page - 1) * self.SEARCH_LOG_PAGE_SIZE
+        text = 'pic log page %s / %s:\n' % (page, pages)
+        text += '\n'.join(islice(
+            self.search_log, offset, offset + self.SEARCH_LOG_PAGE_SIZE
+        ))
+        reply_text_paginated(update, (text, pages),
+                             quote=True, disable_notification=True,
+                             parse_mode=ParseMode.HTML)
 
     @update_handler
     @command(C.REPLY_TEXT)

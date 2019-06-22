@@ -23,6 +23,7 @@ from .database import BotDatabase
 from .context_cache import ContextCache
 from .formatter import Formatter
 from .error import CommandError
+from .search import Search
 
 
 class BotState:
@@ -34,7 +35,8 @@ class BotState:
                  username,
                  root=None,
                  async_max=ASYNC_MAX_DEFAULT,
-                 process_timeout=PROCESS_TIMEOUT_DEFAULT):
+                 process_timeout=PROCESS_TIMEOUT_DEFAULT,
+                 proxy=None):
         if root is None:
             root = os.path.expanduser('~/.bot')
 
@@ -47,6 +49,8 @@ class BotState:
         self.default_file_dir = os.path.join(self.root, 'document')
         self.file_dir = defaultdict(lambda: self.default_file_dir)
         self.tmp_dir = tempfile.mkdtemp(prefix=__name__ + '.')
+
+        self.search = Search(proxy=proxy)
 
         formatter = os.path.join(
             self.context.root_settings,
