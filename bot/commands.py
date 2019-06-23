@@ -176,33 +176,46 @@ class BotCommands:
         except TelegramError as ex:
             self.logger.error('send_chat_action: %r', ex)
 
-        while True:
-            try:
-                res = self.state.search(query)
-            except Exception as ex:
-                bot.send_message(
-                    chat_id, repr(ex), quote=True,
-                    reply_to_message_id=reply_to
-                )
-                return
-            else:
-                keyboard = [[
-                    InlineKeyboardButton('\U0001f517 %d' % (res.offset + 1),
-                                         url=res.url),
-                    InlineKeyboardButton('next', callback_data='pic ' + query)
-                ]]
+        try:
+            res = self.state.search(query)
+        except Exception as ex:
+            bot.send_message(
+                chat_id, repr(ex), quote=True,
+                reply_to_message_id=reply_to
+            )
+            return
+        else:
+            keyboard = [[
+                InlineKeyboardButton(
+                    '\U0001f517 %d' % (res.offset + 1),
+                    url=res.url
+                ),
+                InlineKeyboardButton('next', callback_data='pic')
+            ]]
+            for url in (res.image, res.thumbnail, None):
                 try:
-                    bot.send_photo(
-                        chat_id,
-                        res.image,
-                        caption=query,
-                        quote=True,
-                        reply_to_message_id=reply_to,
-                        reply_markup=InlineKeyboardMarkup(keyboard)
-                    )
+                    self.logger.info('%r %r', query, url)
+                    if url is None:
+                        bot.send_message(
+                            chat_id,
+                            '(bad request)\n%s\n%s\n\n%s' % (
+                                res.image, res.url, query
+                            ),
+                            quote=True,
+                            reply_to_message_id=reply_to
+                        )
+                    else:
+                        bot.send_photo(
+                            chat_id,
+                            url,
+                            caption=query,
+                            quote=True,
+                            reply_to_message_id=reply_to,
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
                     return
-                except BadRequest:
-                    self.logger.info('image post failed: %r', res)
+                except BadRequest as ex:
+                    self.logger.info('image post failed: %r: %r', res, ex)
 
     @update_handler
     def unknown_command(self, _, update):
@@ -297,7 +310,9 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cb_pic(self, _, update):
-        query = remove_control_chars(update.callback_query.data)
+        if not update.callback_query.message:
+            self.logger.info('cb_pic no message')
+        query = remove_control_chars(update.callback_query.message.caption)
         self.state.run_async(self._search, update, query)
 
     @update_handler
