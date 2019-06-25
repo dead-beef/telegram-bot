@@ -17,7 +17,6 @@ from telegram import (
     TelegramError,
     ParseMode
 )
-from telegram.ext import run_async
 
 from .error import BotError, CommandError
 from .promise import Promise, PromiseType as PT
@@ -252,7 +251,6 @@ def get_file(message):
             return type_, data.file_id
     raise ValueError('%r: file not found' % message)
 
-@run_async
 def download_file(message, dirs, deferred=None, overwrite=False):
     try:
         ftype, fid = get_file(message)

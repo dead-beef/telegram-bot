@@ -1,4 +1,3 @@
-import os
 import logging
 from queue import Queue
 from threading import Event
@@ -19,7 +18,6 @@ from .promise import Promise, PromiseType as PT
 from .util import (
     sanitize_log,
     get_chat_title,
-    get_message_filename,
     update_handler,
     download_file,
     command,
@@ -34,31 +32,38 @@ class Bot:
                       ' [%(user_id)s | %(user_link)s | %(user_name)s]'
                       ' %(message)s')
 
-    def __init__(self, token, proxy=None, log_messages=False, root=None):
+    def __init__(self, tokens, proxy=None, log_messages=False, root=None):
+        if not tokens:
+            raise ValueError('no tokens')
+
         self.logger = logging.getLogger('bot.info')
         self.msg_logger = logging.getLogger('bot.message')
         self.logger.info(
-            'init: token=%s proxy=%s log_messages=%s root=%s',
-            token, proxy, log_messages, root
+            'init: tokens=%s proxy=%s log_messages=%s root=%s',
+            tokens, proxy, log_messages, root
         )
 
-        self.token = token.strip()
+        self.tokens = [token.strip() for token in tokens]
         self.proxy = proxy.strip()
         self.log_messages = log_messages
         self.queue = Queue()
         self.stopped = Event()
 
-        self.updater = Updater(self.token, request_kwargs={
-            'proxy_url': self.proxy
-        })
+        self.updaters = [
+            Updater(token, request_kwargs={
+                'proxy_url': self.proxy
+            })
+            for token in tokens
+        ]
+        self.primary = self.updaters[0]
 
-        me = self.updater.bot.get_me()
+        me = self.primary.bot.get_me()
         self.logger.info('get_me: %s', me)
 
         self.state = BotState(self, me.id, me.username, root, proxy=self.proxy)
         self.commands = BotCommands(self)
 
-        dispatcher = self.updater.dispatcher
+        dispatcher = self.primary.dispatcher
 
         dispatcher.add_handler(MessageHandler(
             Filters.text,
@@ -94,14 +99,18 @@ class Bot:
         ))
 
         dispatcher.add_handler(InlineQueryHandler(self.on_inline))
-        dispatcher.add_error_handler(self.on_error)
+
+        for updater in self.updaters:
+            dispatcher = updater.dispatcher
+            dispatcher.add_error_handler(self.on_error)
 
     def save(self):
         self.state.save()
 
     def start_polling(self, interval=0.0):
         self.logger.info('start_polling %f', interval)
-        self.updater.start_polling(interval)
+        for updater in self.updaters:
+            updater.start_polling(interval)
         self.main_loop()
 
     def main_loop(self):
@@ -158,8 +167,9 @@ class Bot:
                         promise = None
         finally:
             self.save()
-            self.logger.info('stopping updater')
-            self.updater.stop()
+            for i, updater in enumerate(self.updaters):
+                self.logger.info('stopping updater %d', i)
+                updater.stop()
 
     def log_update(self, update):
         self.logger.debug('log_update %s', update)
@@ -209,6 +219,10 @@ class Bot:
         if text is not None:
             self.msg_logger.info(text, extra=extra)
 
+    def download_file(self, message, dirs, deferred=None, overwrite=False):
+        self.primary.dispatcher.run_async(download_file, message,
+                                          dirs, deferred, overwrite)
+
     def on_error(self, _, update, error):
         self.logger.error('update "%s" caused error "%s"', update, error)
 
@@ -251,7 +265,7 @@ class Bot:
     @command(C.REPLY_TEXT)
     def on_photo(self, _, update):
         deferred = Promise.defer()
-        download_file(update.message, self.state.file_dir, deferred)
+        self.download_file(update.message, self.state.file_dir, deferred)
         return partial(self.state.on_photo, deferred)
 
     @update_handler
@@ -275,9 +289,9 @@ class Bot:
     @update_handler
     @command(C.REPLY_TEXT)
     def on_voice(self, _, update):
-        download_file(update.message, self.state.file_dir)
+        self.download_file(update.message, self.state.file_dir)
         return self.state.on_voice
 
     @update_handler
     def on_file(self, _, update):
-        download_file(update.message, self.state.file_dir)
+        self.download_file(update.message, self.state.file_dir)

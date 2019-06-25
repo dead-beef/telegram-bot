@@ -55,7 +55,9 @@ def main(args=None):
 
     if os.path.isfile(args.token):
         with open(args.token, 'r') as fp:
-            args.token = fp.read()
+            args.token = [token.strip() for token in fp.readlines()]
+    else:
+        args.token = [args.token]
 
     args.log_level = getattr(logging, args.log_level.upper())
     args.log_messages = args.message_log != 'none'

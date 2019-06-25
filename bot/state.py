@@ -106,7 +106,7 @@ class BotState:
                 'run_async start %s %d',
                 func.__name__, self.async_running
             )
-            Dispatcher.get_instance().run_async(_run_async)
+            self.bot.primary.dispatcher.run_async(_run_async)
         except Exception as ex:
             self.logger.error('run_async error %r', ex)
             with self.async_lock:

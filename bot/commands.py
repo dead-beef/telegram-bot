@@ -25,7 +25,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     Filters
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Unauthorized
 
 from .safe_eval import safe_eval
 from .error import CommandError
@@ -36,7 +36,6 @@ from .util import (
     get_user_name,
     command,
     update_handler,
-    download_file,
     is_phone_number,
     reply_sticker_set,
     CommandType as C,
@@ -85,16 +84,13 @@ class BotCommands:
         self.formatter_emotes = self.state.formatter.list_emotes()
         self.queue = bot.queue
         self.stopped = bot.stopped
-        dispatcher = bot.updater.dispatcher
+        dispatcher = bot.primary.dispatcher
         for field in dir(self):
             if field.startswith('cmd_'):
                 cmd = field[4:]
                 self.logger.info('init: command: /%s', cmd)
                 handler = CommandHandler(cmd, getattr(self, field))
                 dispatcher.add_handler(handler)
-        dispatcher.add_handler(CallbackQueryHandler(
-            self.callback_query
-        ))
         dispatcher.add_handler(MessageHandler(
             Filters.command,
             self.unknown_command
@@ -103,6 +99,11 @@ class BotCommands:
             Filters.status_update,
             self.status_update
         ))
+        for updater in bot.updaters:
+            dispatcher = updater.dispatcher
+            dispatcher.add_handler(CallbackQueryHandler(
+                self.callback_query
+            ))
 
     def _get_user_id(self, msg, phone):
         user_id = None
@@ -162,16 +163,33 @@ class BotCommands:
         )
         self.state.bot.queue.put(learn)
 
-        chat_id = update.effective_chat.id
-        if update.message:
-            reply_to = update.message.message_id
-            bot = update.message.bot
+        chat = update.effective_chat
+        chat_id = chat.id
+
+        if chat.type == chat.PRIVATE:
+            bot = self.state.bot.primary.bot
         else:
-            reply_to = None
-            bot = update.callback_query.bot
+            bot = self.state.bot.updaters[-1].bot
 
         try:
             bot.send_chat_action(chat_id, ChatAction.UPLOAD_PHOTO)
+        except (Unauthorized, BadRequest) as ex:
+            self.logger.warning('send_chat_action: %r', ex)
+            bot = self.state.bot.updaters[0].bot
+            if update.message:
+                reply_to = update.message.message_id
+            else:
+                reply_to = None
+            try:
+                bot.send_message(
+                    chat_id,
+                    'add secondary bot to group',
+                    quote=True,
+                    reply_to_message_id=reply_to
+                )
+            except TelegramError as ex:
+                self.logger.warning('send error message: %r', ex)
+            return
         except TelegramError as ex:
             self.logger.error('send_chat_action: %r', ex)
 
@@ -179,8 +197,7 @@ class BotCommands:
             res = self.state.search(query)
         except Exception as ex:
             bot.send_message(
-                chat_id, repr(ex), quote=True,
-                reply_to_message_id=reply_to
+                chat_id, repr(ex), quote=True
             )
             return
         else:
@@ -200,8 +217,7 @@ class BotCommands:
                             '(bad request)\n%s\n%s\n\n%s' % (
                                 res.image, res.url, query
                             ),
-                            quote=True,
-                            reply_to_message_id=reply_to
+                            quote=True
                         )
                     else:
                         bot.send_photo(
@@ -209,7 +225,6 @@ class BotCommands:
                             url,
                             caption=query,
                             quote=True,
-                            reply_to_message_id=reply_to,
                             reply_markup=InlineKeyboardMarkup(keyboard)
                         )
                     return
@@ -346,7 +361,7 @@ class BotCommands:
             update.message.reply_text('no input image')
             return
         deferred = Promise.defer()
-        download_file(msg, self.state.file_dir, deferred)
+        self.state.bot.download_file(msg, self.state.file_dir, deferred)
         return partial(self.state.on_photo, deferred)
 
     @update_handler
