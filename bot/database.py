@@ -66,21 +66,32 @@ class BotDatabase:
         '  `file_id` TEXT NOT NULL,'
         '  `emoji` TEXT'
         ')',
+        'CREATE TABLE IF NOT EXISTS `search_query` ('
+        '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
+        '  `query` TEXT NOT NULL'
+        ')',
+        'CREATE TABLE IF NOT EXISTS `search_log` ('
+        '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
+        '  `search_query_id` REFERENCES `search_query`(`id`),'
+        '  `user_id` REFERENCES `user`(`id`)'
+        ')',
         'CREATE INDEX IF NOT EXISTS `chat_user_id` ON `chat_user` (`user_id`)',
         'CREATE INDEX IF NOT EXISTS `chat_message` ON `message` (`chat_id`)',
         'CREATE INDEX IF NOT EXISTS `chat_id` ON `chat_user` (`chat_id`)',
         'CREATE INDEX IF NOT EXISTS `sticker_emoji` ON `sticker` (`emoji`)',
-        'CREATE INDEX IF NOT EXISTS `sticker_set_name` ON `sticker_set` (`name`)'
+        'CREATE INDEX IF NOT EXISTS `sticker_set_name` ON `sticker_set` (`name`)',
+        'CREATE INDEX IF NOT EXISTS `search_log_query` ON `search_log` (`search_query_id`)',
+        'CREATE INDEX IF NOT EXISTS `search_log_user` ON `search_log` (`user_id`)'
     ]
 
     def __init__(self, path,
                  user_update_interval=86400,
                  chat_update_interval=86400,
                  sticker_set_update_interval=-1):
+        self.logger = logging.getLogger(__name__)
         self.db_path = path
         self.db = sqlite3.connect(path)
         self.cursor = self.db.cursor()
-        self.logger = logging.getLogger(__name__)
 
         self.user_update_interval = user_update_interval
         self.chat_update_interval = chat_update_interval
@@ -200,7 +211,7 @@ class BotDatabase:
         else:
             query = (
                 'SELECT'
-                '  `id`, "--",'
+                '  `id`, "",'
                 '  COALESCE(`user`.`first_name` || " " || `user`.`last_name`,'
                 '           `user`.`first_name`),'
                 '  "@" || `username`,'
@@ -214,6 +225,44 @@ class BotDatabase:
         self.cursor.execute(
             query,
             (page_size, page * page_size)
+        )
+        return self.cursor.fetchall(), pages
+
+    def get_search_log(self, page, page_size):
+        page = max(page - 1, 0)
+        self.cursor.execute('SELECT COUNT(*) FROM `search_log`')
+        pages = math.ceil(self.cursor.fetchone()[0] / page_size)
+        self.cursor.execute(
+            'SELECT `search_query`.`query`,'
+            '        COALESCE(`user`.`username`,'
+            '                 `user`.`first_name`,'
+            '                 `user`.`last_name`)'
+            ' FROM `search_log`'
+            '  LEFT JOIN `search_query`'
+            '   ON `search_log`.`search_query_id`'
+            '       = `search_query`.`id`'
+            '  LEFT JOIN `user`'
+            '   ON `search_log`.`user_id` = `user`.`id`'
+            ' ORDER BY `search_log`.`id` DESC'
+            ' LIMIT ? OFFSET ?',
+            (page_size, (page - 1) * page_size)
+        )
+        return self.cursor.fetchall(), pages
+
+    def get_search_stats(self, page, page_size):
+        page = max(page - 1, 0)
+        self.cursor.execute('SELECT COUNT(*) FROM `search_query`')
+        pages = math.ceil(self.cursor.fetchone()[0] / page_size)
+        self.cursor.execute(
+            'SELECT `search_query`.`query`,'
+            '       COUNT(`search_log`.`id`) as `count`'
+            ' FROM `search_query`'
+            '  LEFT JOIN `search_log`'
+            '   ON `search_query`.`id` = `search_log`.`search_query_id`'
+            ' GROUP BY `search_query`.`id`'
+            ' ORDER BY `count` DESC'
+            ' LIMIT ? OFFSET ?',
+            (page_size, (page - 1) * page_size)
         )
         return self.cursor.fetchall(), pages
 
@@ -392,3 +441,28 @@ class BotDatabase:
         except Exception as ex:
             self.logger.error('learn_update: %r', ex)
             raise
+
+    def learn_search_query(self, query, user):
+        query = query.strip().lower()
+        self.learn_user(user)
+        while True:
+            self.cursor.execute(
+                'SELECT `id` FROM `search_query` WHERE `query`=?',
+                (query,)
+            )
+            row = self.cursor.fetchone()
+            if row is None:
+                self.cursor.execute(
+                    'INSERT INTO `search_query`(`query`) VALUES(?)',
+                    (query,)
+                )
+            else:
+                query_id = row[0]
+                break
+        self.cursor.execute(
+            'INSERT INTO `search_log`'
+            ' (`search_query_id`, `user_id`)'
+            ' VALUES(?, ?)',
+            (query_id, user.id)
+        )
+        self.db.commit()

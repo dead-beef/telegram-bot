@@ -6,7 +6,6 @@ import logging
 from uuid import uuid4
 from itertools import islice
 from functools import partial
-from collections import deque
 from base64 import b64encode, b64decode
 
 import dice
@@ -33,7 +32,6 @@ from .error import CommandError
 from .promise import Promise, PromiseType as PT
 from .util import (
     remove_control_chars,
-    reply_text_paginated,
     get_command_args,
     get_user_name,
     command,
@@ -79,9 +77,6 @@ class BotCommands:
         '/stickerset <id> - send sticker set\n'
     )
 
-    SEARCH_LOG_MAX_SIZE = 50
-    SEARCH_LOG_PAGE_SIZE = 10
-
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
         self.state = bot.state
@@ -89,7 +84,6 @@ class BotCommands:
         self.formatter_emotes = self.state.formatter.list_emotes()
         self.queue = bot.queue
         self.stopped = bot.stopped
-        self.search_log = deque(maxlen=self.SEARCH_LOG_MAX_SIZE)
         dispatcher = bot.updater.dispatcher
         for field in dir(self):
             if field.startswith('cmd_'):
@@ -159,9 +153,13 @@ class BotCommands:
             user = update.callback_query.from_user
         else:
             user = update.message.from_user
-        self.search_log.appendleft('%s (<a href="tg://user?id=%s">%s</a>)' % (
-            html.escape(query), user.id, html.escape(get_user_name(user))
-        ))
+
+        learn = Promise.wrap(
+            self.state.db.learn_search_query,
+            query, user,
+            ptype=PT.MANUAL
+        )
+        self.state.bot.queue.put(learn)
 
         chat_id = update.effective_chat.id
         if update.message:
@@ -316,28 +314,14 @@ class BotCommands:
         self.state.run_async(self._search, update, query)
 
     @update_handler
-    @command(C.NONE)
-    def cmd_piclog(self, _, update):
-        pages = math.ceil(len(self.search_log) / self.SEARCH_LOG_PAGE_SIZE)
-        text = 'pic log page 1 / %s:\n' % pages
-        text += '\n'.join(islice(self.search_log, 0, self.SEARCH_LOG_PAGE_SIZE))
-        reply_text_paginated(update, (text, pages),
-                             quote=True, disable_notification=True,
-                             parse_mode=ParseMode.HTML)
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cmd_piclog(self, *_):
+        return self.state.list_search_requests
 
     @update_handler
-    @command(C.NONE)
-    def cb_pic_log(self, _, update):
-        pages = math.ceil(len(self.search_log) / self.SEARCH_LOG_PAGE_SIZE)
-        page = int(update.callback_query.data)
-        offset = (page - 1) * self.SEARCH_LOG_PAGE_SIZE
-        text = 'pic log page %s / %s:\n' % (page, pages)
-        text += '\n'.join(islice(
-            self.search_log, offset, offset + self.SEARCH_LOG_PAGE_SIZE
-        ))
-        reply_text_paginated(update, (text, pages),
-                             quote=True, disable_notification=True,
-                             parse_mode=ParseMode.HTML)
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cb_pic_log(self, *_):
+        return self.state.list_search_requests
 
     @update_handler
     @command(C.REPLY_TEXT)

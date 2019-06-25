@@ -221,9 +221,12 @@ def get_chat_title(chat):
         str(chat.last_name)
     )
 
-def get_user_name(user):
+def get_user_name(user, notification=True):
     if user.username:
-        return '@' + user.username
+        ret = user.username
+        if notification:
+            ret = '@' + ret
+        return ret
     if user.first_name or user.last_name:
         return ' '.join(
             s for s in (user.first_name, user.last_name) if s

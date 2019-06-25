@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import html
 import random
 import logging
 import tempfile
@@ -31,8 +32,7 @@ class BotState:
     PROCESS_TIMEOUT_DEFAULT = 30
 
     def __init__(self,
-                 id_,
-                 username,
+                 bot, id_, username,
                  root=None,
                  async_max=ASYNC_MAX_DEFAULT,
                  process_timeout=PROCESS_TIMEOUT_DEFAULT,
@@ -40,6 +40,7 @@ class BotState:
         if root is None:
             root = os.path.expanduser('~/.bot')
 
+        self.bot = bot
         self.id = id_
         self.username = username
         self.root = root
@@ -382,14 +383,50 @@ class BotState:
             .format(
                 i,
                 user[0],
-                user[1] or '&lt;no phone&gt;',
-                user[2] or '&lt;no name&gt;',
-                user[3] or '&lt;no username&gt;',
+                html.escape(user[1] if user[1] is not None
+                            else '<no phone>'),
+                html.escape(user[2] or '<no name>'),
+                html.escape(user[3] or '<no username>'),
                 user[4]
             )
             for i, user in enumerate(users, offset + 1)
         )
         res = 'users page %d / %d:\n\n%s' % (page, pages, res)
+        return res, page, pages, False, ParseMode.HTML
+
+    def list_search_requests(self, update):
+        page_size = 10
+        if update.callback_query:
+            page = int(update.callback_query.data)
+        else:
+            page = 1
+        offset = page_size * (page - 1)
+        requests, pages = self.db.get_search_log(page, page_size)
+        res = '\n'.join(
+            '{0}. {1} (<b>{2}</b>)'
+            .format(
+                i,
+                html.escape(query),
+                html.escape(user)
+            )
+            for i, (query, user) in enumerate(requests, offset + 1)
+        )
+        res = 'pic log page %d / %d:\n\n%s' % (page, pages, res)
+        return res, page, pages, False, ParseMode.HTML
+
+    def get_search_stats(self, update):
+        page_size = 10
+        if update.callback_query:
+            page = int(update.callback_query.data)
+        else:
+            page = 1
+        stats, pages = self.db.get_search_stats(page, page_size)
+        res = '\n'.join(
+            '{0}. {1} (<b>{2}</b>)'
+            .format(i, html.escape(query), count)
+            for i, (query, count) in enumerate(stats, 1)
+        )
+        res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
         return res, page, pages, False, ParseMode.HTML
 
     def on_text(self, update):

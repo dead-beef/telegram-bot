@@ -55,7 +55,7 @@ class Bot:
         me = self.updater.bot.get_me()
         self.logger.info('get_me: %s', me)
 
-        self.state = BotState(me.id, me.username, root, proxy=self.proxy)
+        self.state = BotState(self, me.id, me.username, root, proxy=self.proxy)
         self.commands = BotCommands(self)
 
         dispatcher = self.updater.dispatcher
