@@ -67,6 +67,7 @@ class BotCommands:
         '/roll <dice> - roll dice\n'
         '/pic <query> - image search\n'
         '/piclog - show image search log\n'
+        '/picstats - show image search stats\n'
         '/start - generate text\n'
         '/image - generate image\n'
         '/sticker - send random sticker\n'
@@ -322,6 +323,16 @@ class BotCommands:
     @command(C.REPLY_TEXT_PAGINATED)
     def cb_pic_log(self, *_):
         return self.state.list_search_requests
+
+    @update_handler
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cmd_picstats(self, *_):
+        return self.state.get_search_stats
+
+    @update_handler
+    @command(C.REPLY_TEXT_PAGINATED)
+    def cb_pic_stats(self, *_):
+        return self.state.get_search_stats
 
     @update_handler
     @command(C.REPLY_TEXT)
