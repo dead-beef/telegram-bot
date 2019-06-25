@@ -154,9 +154,8 @@ class BotDatabase:
     def set_chat_data(self, chat, **fields):
         self._update_item_data('chat', chat.id, fields)
 
-    def get_sticker_sets(self, page=1):
+    def get_sticker_sets(self, page, page_size):
         page = max(page - 1, 0)
-        page_size = 50
         self.cursor.execute('SELECT COUNT(*) FROM `sticker_set`')
         pages = math.ceil(self.cursor.fetchone()[0] / page_size)
         self.cursor.execute(
@@ -177,9 +176,8 @@ class BotDatabase:
         )
         return self.cursor.fetchall()
 
-    def get_users(self, page, permission):
+    def get_users(self, page, page_size, permission):
         page = max(page - 1, 0)
-        page_size = 25
         self.cursor.execute('SELECT COUNT(*) FROM `user`')
         pages = math.ceil(self.cursor.fetchone()[0] / page_size)
         if permission >= P.ADMIN:

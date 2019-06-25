@@ -295,21 +295,46 @@ def reply_text(update, msg, quote=False, parse_mode=None):
     update.message.reply_text(msg, quote=quote, parse_mode=parse_mode)
 
 def reply_text_paginated(update, msg, quote=False, parse_mode=None, disable_notification=False):
+    page = 1
     pages = 1
+    max_pages = 8
+
     if isinstance(msg, tuple):
         if len(msg) == 2:
             msg, pages = msg
         elif len(msg) == 3:
-            msg, pages, quote = msg
+            msg, page, pages = msg
         elif len(msg) == 4:
-            msg, pages, quote, parse_mode = msg
+            msg, page, pages, quote = msg
+        elif len(msg) == 5:
+            msg, page, pages, quote, parse_mode = msg
 
     if pages <= 1:
         return reply_text(update, msg, quote, parse_mode)
 
+    if pages <= max_pages:
+        buttons = ((str(i), i) for i in range(1, pages + 1))
+    else:
+        min_page = page - int(max_pages / 2)
+        max_page = page + int(max_pages / 2)
+        if min_page <= 0:
+            max_page -= min_page - 1
+            min_page = 1
+        elif max_page > pages:
+            min_page -= max_page - pages - 1
+            max_page = pages + 1
+        buttons = [
+            ('1', 1) if i == min_page
+            else (str(pages), pages) if i == max_page - 1
+            else ('...' if (i == min_page + 1 and i != 2
+                            or i == max_page - 2 and i != pages - 1)
+                  else str(i), i)
+            for i in range(min_page, max_page)
+        ]
+
     keyboard = [
-        InlineKeyboardButton(str(value), callback_data=value)
-        for value in range(1, pages + 1)
+        InlineKeyboardButton(title, callback_data=value)
+        for title, value in buttons
     ]
     keyboard = list(chunks(keyboard, 4))
     markup = InlineKeyboardMarkup(keyboard)

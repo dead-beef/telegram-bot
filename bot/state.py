@@ -348,11 +348,12 @@ class BotState:
         ).wait()
 
     def list_sticker_sets(self, update):
+        page_size = 25
         if update.callback_query:
             page = int(update.callback_query.data)
         else:
             page = 1
-        sets, pages = self.db.get_sticker_sets(page)
+        sets, pages = self.db.get_sticker_sets(page, page_size)
         if pages <= 1:
             return 'no sticker sets', 1
         res = '\n'.join(
@@ -360,9 +361,10 @@ class BotState:
             for set_ in sets
         )
         res = 'sticker sets page %d / %d:\n%s' % (page, pages, res)
-        return res, pages, True, ParseMode.MARKDOWN
+        return res, page, pages, False, ParseMode.MARKDOWN
 
     def list_users(self, update):
+        page_size = 10
         if update.callback_query:
             page = int(update.callback_query.data)
         else:
@@ -371,24 +373,24 @@ class BotState:
             permission = 0
         else:
             permission = self.db.get_user_data(update.effective_user, 'permission')
-        users, pages = self.db.get_users(page, permission)
+        users, pages = self.db.get_users(page, page_size, permission)
         if not users:
-            return 'no users', 1, True
-        offset = 25 * (page - 1)
+            return 'no users', 1, 1, True
+        offset = page_size * (page - 1)
         res = '\n'.join(
             '{0}. ({5}) <a href="tg://user?id={1}">{1}</a> {2} {3} {4}'
             .format(
-                i + 1 + offset,
+                i,
                 user[0],
                 user[1] or '&lt;no phone&gt;',
                 user[2] or '&lt;no name&gt;',
                 user[3] or '&lt;no username&gt;',
                 user[4]
             )
-            for i, user in enumerate(users)
+            for i, user in enumerate(users, offset + 1)
         )
-        res = 'users page %d / %d:\n%s' % (page, pages, res)
-        return res, pages, True, ParseMode.HTML
+        res = 'users page %d / %d:\n\n%s' % (page, pages, res)
+        return res, page, pages, False, ParseMode.HTML
 
     def on_text(self, update):
         message = update.message
