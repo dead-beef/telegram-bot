@@ -28,7 +28,7 @@ from telegram.ext import (
 from telegram.error import BadRequest, Unauthorized
 
 from .safe_eval import safe_eval
-from .error import CommandError
+from .error import CommandError, SearchError
 from .promise import Promise, PromiseType as PT
 from .util import (
     remove_control_chars,
@@ -153,8 +153,10 @@ class BotCommands:
     def _search(self, update, query):
         if update.callback_query:
             user = update.callback_query.from_user
+            reply_to = None
         else:
             user = update.message.from_user
+            reply_to = update.message.message_id
 
         learn = Promise.wrap(
             self.state.db.learn_search_query,
@@ -166,8 +168,9 @@ class BotCommands:
         chat = update.effective_chat
         chat_id = chat.id
 
+        primary_bot = self.state.bot.primary.bot
         if chat.type == chat.PRIVATE:
-            bot = self.state.bot.primary.bot
+            bot = primary_bot
         else:
             bot = self.state.bot.updaters[-1].bot
 
@@ -175,13 +178,8 @@ class BotCommands:
             bot.send_chat_action(chat_id, ChatAction.UPLOAD_PHOTO)
         except (Unauthorized, BadRequest) as ex:
             self.logger.warning('send_chat_action: %r', ex)
-            bot = self.state.bot.updaters[0].bot
-            if update.message:
-                reply_to = update.message.message_id
-            else:
-                reply_to = None
             try:
-                bot.send_message(
+                primary_bot.send_message(
                     chat_id,
                     'add secondary bot to group',
                     quote=True,
@@ -195,19 +193,38 @@ class BotCommands:
 
         try:
             res = self.state.search(query)
+        except SearchError as ex:
+            primary_bot.send_message(
+                chat_id,
+                str(ex),
+                quote=True,
+                reply_to_message_id=reply_to
+            )
         except Exception as ex:
-            bot.send_message(
-                chat_id, repr(ex), quote=True
+            primary_bot.send_message(
+                chat_id,
+                repr(ex),
+                quote=True,
+                reply_to_message_id=reply_to
             )
             return
         else:
-            keyboard = [[
+            keyboard = [
                 InlineKeyboardButton(
                     '\U0001f517 %d' % (res.offset + 1),
                     url=res.url
-                ),
-                InlineKeyboardButton('next', callback_data='pic')
-            ]]
+                )
+            ]
+            results = self.state.search[query]
+            if results.offset > 1:
+                keyboard.append(
+                    InlineKeyboardButton('reset', callback_data='picreset')
+                )
+            if results.offset < len(results.items) or not results.full:
+                keyboard.append(
+                    InlineKeyboardButton('next', callback_data='pic')
+                )
+            keyboard = InlineKeyboardMarkup([keyboard])
             for url in (res.image, res.thumbnail, None):
                 try:
                     self.logger.info('%r %r', query, url)
@@ -216,16 +233,14 @@ class BotCommands:
                             chat_id,
                             '(bad request)\n%s\n%s\n\n%s' % (
                                 res.image, res.url, query
-                            ),
-                            quote=True
+                            )
                         )
                     else:
                         bot.send_photo(
                             chat_id,
                             url,
                             caption=query,
-                            quote=True,
-                            reply_markup=InlineKeyboardMarkup(keyboard)
+                            reply_markup=keyboard
                         )
                     return
                 except BadRequest as ex:
@@ -327,6 +342,15 @@ class BotCommands:
         if not update.callback_query.message:
             self.logger.info('cb_pic no message')
         query = remove_control_chars(update.callback_query.message.caption)
+        self.state.run_async(self._search, update, query)
+
+    @update_handler
+    @command(C.NONE)
+    def cb_picreset(self, _, update):
+        if not update.callback_query.message:
+            self.logger.info('cb_picreset no message')
+        query = remove_control_chars(update.callback_query.message.caption)
+        self.state.search[query].offset = 0
         self.state.run_async(self._search, update, query)
 
     @update_handler

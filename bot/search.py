@@ -1,7 +1,6 @@
 import os
 import re
 import json
-import tempfile
 import hashlib
 import logging
 from time import time, sleep
@@ -11,6 +10,8 @@ from urllib.parse import urlsplit, urlencode
 
 import urllib3
 from urllib3.contrib.socks import SOCKSProxyManager
+
+from .error import SearchError
 
 
 def get_proxy_manager(proxy):
@@ -115,6 +116,10 @@ class Search:
             sleep(self.throttle - dt)
         self.last_used = time()
 
+    def __getitem__(self, query):
+        query = query.strip().lower()
+        return self.cache[query]
+
     def __call__(self, query):
         with self.lock:
             self._throttle()
@@ -128,7 +133,7 @@ class Search:
                     if results.full:
                         if not results.items:
                             self.logger.info('no results')
-                            raise ValueError('no search results')
+                            raise SearchError('no search results')
                         self.logger.info('wrap')
                         results.offset = 0
                     else:
