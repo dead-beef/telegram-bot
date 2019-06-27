@@ -245,7 +245,7 @@ class BotDatabase:
             '   ON `search_log`.`user_id` = `user`.`id`'
             ' ORDER BY `search_log`.`id` DESC'
             ' LIMIT ? OFFSET ?',
-            (page_size, (page - 1) * page_size)
+            (page_size, page * page_size)
         )
         return self.cursor.fetchall(), pages
 
@@ -260,9 +260,9 @@ class BotDatabase:
             '  LEFT JOIN `search_log`'
             '   ON `search_query`.`id` = `search_log`.`search_query_id`'
             ' GROUP BY `search_query`.`id`'
-            ' ORDER BY `count` DESC'
+            ' ORDER BY `count` DESC, `search_query`.`query` ASC'
             ' LIMIT ? OFFSET ?',
-            (page_size, (page - 1) * page_size)
+            (page_size, page * page_size)
         )
         return self.cursor.fetchall(), pages
 

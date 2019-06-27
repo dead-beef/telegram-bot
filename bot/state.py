@@ -421,10 +421,11 @@ class BotState:
         else:
             page = 1
         stats, pages = self.db.get_search_stats(page, page_size)
+        offset = page_size * (page - 1)
         res = '\n'.join(
             '{0}. {1} (<b>{2}</b>)'
             .format(i, html.escape(query), count)
-            for i, (query, count) in enumerate(stats, 1)
+            for i, (query, count) in enumerate(stats, offset + 1)
         )
         res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
         return res, page, pages, False, ParseMode.HTML
