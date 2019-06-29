@@ -2,16 +2,6 @@ import re
 import math
 
 
-MATH_FUNC = [
-    'acosh', 'acos', 'asinh', 'asin', 'atanh', 'atan',
-    'ceil', 'cos', 'cosh', 'degrees', 'erfc', 'erf',
-    'expm1', 'exp', 'fabs', 'floor', 'fmod', 'frexp',
-    'fsum', 'gamma', 'isfinite', 'isinf',
-    'isnan', 'lgamma', 'log10',
-    'log1p', 'log2', 'log', 'modf', 'radians',
-    'sinh', 'sin', 'sqrt', 'tanh', 'tan', 'trunc'
-]
-
 class ParseError(Exception):
     pass
 
@@ -81,22 +71,47 @@ class Const:
             except ValueError:
                 return self.next_op(s)
 
+def create_functions():
+    ret = {
+        'abs': abs
+    }
+    for func in [
+            'acosh', 'acos', 'asinh', 'asin', 'atanh', 'atan',
+            'ceil', 'cos', 'cosh', 'degrees', 'erfc', 'erf',
+            'expm1', 'exp', 'fabs', 'floor', 'fmod', 'frexp',
+            'fsum', 'gamma', 'isfinite', 'isinf',
+            'isnan', 'lgamma', 'log10',
+            'log1p', 'log2', 'log', 'modf', 'radians',
+            'sinh', 'sin', 'sqrt', 'tanh', 'tan', 'trunc'
+    ]:
+        ret[func] = getattr(math, func)
+    return ret
+
 def create_safe_eval():
+    functions = create_functions()
+    function_names = sorted(functions.keys(), reverse=True)
+
     paren = Paren('(', ')', None)
     const = Const(paren)
     func = UnaryOp(
-        '^(%s)(.*)' % '|'.join(MATH_FUNC),
-        (lambda op, x: getattr(math, op)(x)),
+        '^(%s)(.*)' % '|'.join(function_names),
+        (lambda op, x: functions[op](x)),
         const
     )
     un = UnaryOp(
         r'^([+-])(.*)',
         (lambda op, x: -x if op == '-' else x),
-        func)
+        func
+    )
+    pow_ = BinaryOp(
+        r'\^',
+        lambda _, x, y: float(x) ** float(y),
+        un
+    )
     mul = BinaryOp(
         r'[*/]',
         (lambda op, x, y: x * y if op == '*' else x / y),
-        un
+        pow_
     )
     add = BinaryOp(
         r'[+-]',
