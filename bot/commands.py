@@ -1,10 +1,8 @@
 import re
-import math
 import html
 import logging
 
 from uuid import uuid4
-from itertools import islice
 from functools import partial
 from base64 import b64encode, b64decode
 
@@ -77,6 +75,8 @@ class BotCommands:
         '/stickerset <id> - send sticker set\n'
     )
 
+    RE_COMMAND = re.compile(r'^/([^@\s]+)')
+
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
         self.state = bot.state
@@ -85,15 +85,9 @@ class BotCommands:
         self.queue = bot.queue
         self.stopped = bot.stopped
         dispatcher = bot.primary.dispatcher
-        for field in dir(self):
-            if field.startswith('cmd_'):
-                cmd = field[4:]
-                self.logger.info('init: command: /%s', cmd)
-                handler = CommandHandler(cmd, getattr(self, field))
-                dispatcher.add_handler(handler)
         dispatcher.add_handler(MessageHandler(
             Filters.command,
-            self.unknown_command
+            self.on_command
         ))
         dispatcher.add_handler(MessageHandler(
             Filters.status_update,
@@ -243,16 +237,37 @@ class BotCommands:
                             reply_markup=keyboard
                         )
                     return
-                except BadRequest as ex:
+                except TelegramError as ex:
                     self.logger.info('image post failed: %r: %r', res, ex)
 
     @update_handler
-    def unknown_command(self, _, update):
-        if update.message.chat.type == update.message.chat.PRIVATE:
-            update.message.reply_text(
-                'unknown command "%s"' % update.message.text,
-                quote=True
-            )
+    def on_command(self, bot, update):
+        msg = update.message
+        if not msg:
+            return
+        msg = msg.text or msg.caption
+        if not msg:
+            return
+
+        for expr, repl in self.state.alias:
+            msg = expr.sub(repl, msg)
+        update.message.text = msg
+
+        match = self.RE_COMMAND.match(msg)
+        if match is None:
+            self.logger.warning('!match command %s', msg)
+        handler = 'cmd_' + match.group(1)
+
+        try:
+            handler = getattr(self, handler)
+        except AttributeError:
+            if update.message.chat.type == update.message.chat.PRIVATE:
+                update.message.reply_text(
+                    'unknown command "%s"' % msg,
+                    quote=True
+                )
+        else:
+            handler(bot, update)
 
     @update_handler
     def callback_query(self, bot, update):
