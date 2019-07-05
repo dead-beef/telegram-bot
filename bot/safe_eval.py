@@ -1,5 +1,6 @@
 import re
 import math
+from random import random
 
 
 class ParseError(Exception):
@@ -63,6 +64,8 @@ class Const:
             return math.e
         elif s_ == 'pi':
             return math.pi
+        elif s_ in ('random', 'rnd'):
+            return random()
         try:
             return int(s)
         except ValueError:
