@@ -61,7 +61,7 @@ class BotCommands:
         '/echo <text> - print text\n'
         '/format <text> - format text\n'
         '/eval <expression> - evaluate expression\n'
-        '/roll <dice> - roll dice\n'
+        '/roll <dice> [message] - roll dice\n'
         '/pic <query> - image search\n'
         '/piclog - show image search log\n'
         '/picstats - show image search stats\n'
@@ -76,6 +76,7 @@ class BotCommands:
     )
 
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
+    RE_DICE = re.compile(r'^\s*([-+0-9duwtfrF%hml^ov ]+)')
 
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
@@ -435,13 +436,19 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cmd_roll(self, _, update):
-        msg = get_command_args(update.message, help='usage: /roll <dice>')
-        roll = int(dice.roll(msg))
-        update.message.reply_text(
-            '<i>%s</i> → <b>%s</b>' % (msg, roll),
-            quote=True,
-            parse_mode=ParseMode.HTML
-        )
+        help_ = 'usage: /roll <dice> [message]'
+        msg = get_command_args(update.message, help=help_)
+        match = self.RE_DICE.match(msg)
+        if match is None:
+            update.message.reply_text(help_, quote=True)
+        else:
+            msg = match.group(1).strip()
+            roll = int(dice.roll(msg))
+            update.message.reply_text(
+                '<i>%s</i> → <b>%s</b>' % (msg, roll),
+                quote=True,
+                parse_mode=ParseMode.HTML
+            )
 
     @update_handler
     @command(C.NONE)
