@@ -145,6 +145,16 @@ class BotCommands:
             return None
         return '[id{0} {1}](tg://user?id={0})'.format(user_id, phone)
 
+    def _get_chat_settings(self, chat):
+        promise = Promise.wrap(
+            self.state.get_chat_settings,
+            chat,
+            ptype=PT.MANUAL
+        )
+        self.queue.put(promise)
+        promise.wait()
+        return promise.value
+
     def _search(self, update, query):
         if update.callback_query:
             user = update.callback_query.from_user
@@ -246,12 +256,13 @@ class BotCommands:
         msg = update.message
         if not msg:
             return
+        aliases = self._get_chat_settings(msg.chat)['aliases'];
         msg = msg.text or msg.caption
         if not msg:
             return
 
-        for expr, repl in self.state.alias:
-            msg = expr.sub(repl, msg)
+        for expr, repl in aliases.items():
+            msg = re.sub(expr, repl, msg, re.I)
         update.message.text = msg
 
         match = self.RE_COMMAND.match(msg)

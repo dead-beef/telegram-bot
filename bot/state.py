@@ -65,20 +65,6 @@ class BotState:
             self.logger.warning('formatter settings not found: %s', formatter)
             self.formatter = Formatter()
 
-        alias = os.path.join(
-            self.context.root_settings,
-            'alias.json'
-        )
-        if os.path.isfile(alias):
-            with open(alias) as fp:
-                self.alias = [
-                    (re.compile(expr), repl)
-                    for expr, repl in json.load(fp).items()
-                ]
-        else:
-            self.logger.warning('formatter settings not found: %s', formatter)
-            self.alias = []
-
         self.async_lock = Lock()
         self.async_running = 0
         self.async_max = async_max

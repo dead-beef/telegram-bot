@@ -1,6 +1,10 @@
 {
 	"filter": "filter.json",
 	"filter_size": "384x384",
+	"roll_seperator": "\\b(\\|\\||or|или)\\b",
+	"aliases": {
+		"^/test\\b": "/echo test"
+	},
 	"on_add_self": [
 		"add_self"
 	],
