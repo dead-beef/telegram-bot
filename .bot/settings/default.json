@@ -1,7 +1,7 @@
 {
 	"filter": "filter.json",
 	"filter_size": "384x384",
-	"roll_seperator": "\\b(\\|\\||or|или)\\b",
+	"roll_separator": "\\s+(?:\\|\\||or|или)\\s+",
 	"aliases": {
 		"^/test\\b": "/echo test"
 	},

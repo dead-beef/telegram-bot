@@ -1,5 +1,6 @@
 import re
 import html
+import random
 import logging
 
 from uuid import uuid4
@@ -76,7 +77,7 @@ class BotCommands:
     )
 
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
-    RE_DICE = re.compile(r'^\s*([-+0-9duwtfrF%hml^ov ]+)')
+    RE_DICE = re.compile(r'^\s*([0-9d][-+0-9duwtfrF%hml^ov ]*)')
 
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
@@ -256,7 +257,7 @@ class BotCommands:
         msg = update.message
         if not msg:
             return
-        aliases = self._get_chat_settings(msg.chat)['aliases'];
+        aliases = self._get_chat_settings(msg.chat)['aliases']
         msg = msg.text or msg.caption
         if not msg:
             return
@@ -447,11 +448,19 @@ class BotCommands:
     @update_handler
     @command(C.NONE)
     def cmd_roll(self, _, update):
-        help_ = 'usage: /roll <dice> [message]'
+        help_ = ('usage:\n'
+                 '/roll <dice> [message]\n'
+                 '/roll <string> || <string> [|| <string>...]\n')
         msg = get_command_args(update.message, help=help_)
         match = self.RE_DICE.match(msg)
         if match is None:
-            update.message.reply_text(help_, quote=True)
+            settings = self._get_chat_settings(update.message.chat)
+            separator = settings['roll_separator']
+            strings = [ s for s in re.split(separator, msg, re.I) if s]
+            if len(strings) < 2:
+                update.message.reply_text(help_, quote=True)
+            else:
+                update.message.reply_text(random.choice(strings), quote=True)
         else:
             msg = match.group(1).strip()
             roll = int(dice.roll(msg))
