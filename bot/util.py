@@ -33,6 +33,8 @@ RE_COMMAND_USERNAME = re.compile(r'^/[^@\s]+@([^\s]+)\s*')
 
 RE_PHONE_NUMBER = re.compile(r'^\+[0-9]+$')
 
+RE_ANIMATION_URL = re.compile(r'^[^?&]*\.gif([?&].*)?$', re.I)
+
 RE_SANITIZE_MSG = re_list_compile([
     (r'<LF>', '[LF]'),
     (r'\n+', ' <LF> '),
@@ -407,6 +409,15 @@ def reply_callback_query(update, msg):
             msg = repr(msg)
     message = update.callback_query.message
     message.edit_text(msg)
+
+def send_image(bot, chat_id, url, *args, **kwargs):
+    LOGGER.debug('send_image %r %r', url, RE_ANIMATION_URL.match(url))
+    if RE_ANIMATION_URL.match(url):
+        LOGGER.debug('send_animation')
+        bot.send_animation(chat_id, url, *args, **kwargs)
+    else:
+        LOGGER.debug('send_photo')
+        bot.send_photo(chat_id, url, *args, **kwargs)
 
 
 def update_handler(method):

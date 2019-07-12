@@ -33,6 +33,7 @@ from .util import (
     remove_control_chars,
     get_command_args,
     get_user_name,
+    send_image,
     command,
     update_handler,
     is_phone_number,
@@ -242,9 +243,8 @@ class BotCommands:
                             )
                         )
                     else:
-                        bot.send_photo(
-                            chat_id,
-                            url,
+                        send_image(
+                            bot, chat_id, url,
                             caption=query,
                             reply_markup=keyboard
                         )
