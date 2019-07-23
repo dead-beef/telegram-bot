@@ -33,6 +33,7 @@ from .util import (
     remove_control_chars,
     get_command_args,
     get_user_name,
+    get_message_text,
     send_image,
     command,
     update_handler,
@@ -78,6 +79,7 @@ class BotCommands:
     )
 
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
+    RE_COMMAND_NO_ARGS = re.compile(r'^/([^@\s]+)(@\S+)?\s*$')
     RE_DICE = re.compile(r'^\s*([0-9d][-+0-9duwtfrF%hml^ov ]*)')
 
     def __init__(self, bot):
@@ -257,13 +259,18 @@ class BotCommands:
         msg = update.message
         if not msg:
             return
+
+        text = get_message_text(msg)
+        if msg.reply_to_message and self.RE_COMMAND_NO_ARGS.match(text):
+            text = ' '.join((text, get_message_text(msg.reply_to_message)))
+
         aliases = self._get_chat_settings(msg.chat)['aliases']
-        msg = msg.text or msg.caption
+        msg = text
         if not msg:
             return
 
         for expr, repl in aliases.items():
-            msg = re.sub(expr, repl, msg, re.I)
+            msg = re.sub(expr, repl, msg, flags=re.I)
         update.message.text = msg
 
         match = self.RE_COMMAND.match(msg)

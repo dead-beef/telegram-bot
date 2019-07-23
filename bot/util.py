@@ -187,16 +187,10 @@ def strip_command(string):
 def get_command_args(msg, nargs=1, help='missing command argument'):
     if nargs != 1:
         raise NotImplementedError('get_command_args nargs != 1')
-    while True:
-        args = get_message_text(msg)
-        if args:
-            args = strip_command(args)
-        if args:
-            return args
-        elif msg.reply_to_message:
-            msg = msg.reply_to_message
-        else:
-            raise CommandError(help)
+    args = strip_command(get_message_text(msg))
+    if not args:
+        raise CommandError(help)
+    return args
 
 def match_command_user(cmd, username):
     match = RE_COMMAND_USERNAME.match(cmd)
@@ -242,7 +236,7 @@ def get_message_filename(message):
     )
 
 def get_message_text(message):
-    return message.text or message.caption
+    return message.text or message.caption or ''
 
 def get_file(message):
     for type_ in FILE_TYPES:
@@ -255,6 +249,7 @@ def get_file(message):
 
 def download_file(message, dirs, deferred=None, overwrite=False):
     try:
+        ftype, fid = None, None
         ftype, fid = get_file(message)
         fdir = dirs[ftype]
         fname = os.path.join(fdir, get_message_filename(message))
@@ -265,7 +260,7 @@ def download_file(message, dirs, deferred=None, overwrite=False):
             message.bot.get_file(fid).download(fname)
             LOGGER.info('download complete: %s -> %s', ftype, fname)
     except BaseException as ex:
-        LOGGER.error('download error: %s -> %s: %r', ftype, fname, ex)
+        LOGGER.error('download error: %r -> %r: %r', ftype, fname, ex)
         if deferred is not None:
             deferred.reject(ex)
         raise
