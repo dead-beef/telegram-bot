@@ -50,8 +50,11 @@ FILE_TYPES = ['video', 'audio', 'document', 'voice', 'photo']
 
 
 class Permission(enum.IntEnum):
+    IGNORED = -2
+    BANNED = -1
     USER = 0
     ADMIN = 255
+    ROOT = 256
 
 
 class CommandType(enum.IntEnum):
@@ -438,9 +441,7 @@ def update_handler(method):
     return ret
 
 
-def check_permission(bot, user, min_value):
-    if min_value is None:
-        return True
+def check_permission(bot, user, min_value=Permission.USER):
     get_permission = Promise.wrap(
         bot.state.db.get_user_data,
         user,
@@ -452,11 +453,11 @@ def check_permission(bot, user, min_value):
     value = get_permission.value
     if not isinstance(value, int):
         bot.logger.error('check_permission: %r', value)
-        return False
-    return value >= min_value
+        return False, True
+    return value >= min_value, value > Permission.IGNORED
 
 
-def command(type_, permission=None):
+def command(type_, permission=Permission.USER):
     def decorator(method):
         @wraps(method)
         def ret(self, bot, update):
@@ -470,11 +471,18 @@ def command(type_, permission=None):
                                      % update.message.text)
                     return
 
-                if not check_permission(self,
-                                        update.message.from_user,
-                                        permission):
-                    self.logger.warning('permission denied: %s', update.message)
-                    update.message.reply_text('permission denied', quote=True)
+                perm, reply = check_permission(
+                    self, update.message.from_user, permission
+                )
+                if not perm:
+                    if reply:
+                        self.logger.warning(
+                            'permission denied: %s', update.message
+                        )
+                        update.message.reply_text(
+                            'permission denied',
+                            quote=True
+                        )
                     return
 
             try:

@@ -21,7 +21,8 @@ from .util import (
     update_handler,
     download_file,
     command,
-    CommandType as C
+    CommandType as C,
+    Permission as P
 )
 
 
@@ -231,14 +232,14 @@ class Bot:
         self.commands.inline_query(bot, update)
 
     @update_handler
-    @command(C.REPLY_TEXT)
+    @command(C.REPLY_TEXT, P.IGNORED)
     def on_text(self, _, update):
         if update.message is None:
             return None
         return self.state.on_text
 
     @update_handler
-    @command(C.REPLY_STICKER)
+    @command(C.REPLY_STICKER, P.IGNORED)
     def on_sticker(self, bot, update):
         if update.message is None or update.message.sticker is None:
             return None
@@ -262,7 +263,7 @@ class Bot:
         return self.state.on_sticker
 
     @update_handler
-    @command(C.REPLY_TEXT)
+    @command(C.REPLY_TEXT, P.IGNORED)
     def on_photo(self, _, update):
         deferred = Promise.defer()
         self.download_file(update.message, self.state.file_dir, deferred)
@@ -287,7 +288,7 @@ class Bot:
                 )
 
     @update_handler
-    @command(C.REPLY_TEXT)
+    @command(C.REPLY_TEXT, P.IGNORED)
     def on_voice(self, _, update):
         self.download_file(update.message, self.state.file_dir)
         return self.state.on_voice
