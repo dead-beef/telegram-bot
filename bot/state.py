@@ -430,6 +430,18 @@ class BotState:
         res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
         return res, page, pages, False, ParseMode.HTML
 
+    def query_db(self, query):
+        self.db.cursor.execute(query)
+        row_count = self.db.cursor.rowcount
+        self.db.save()
+        rows = self.db.cursor.fetchall()
+        res = '\n'.join(' '.join(repr(col) for col in row) for row in rows)
+        if len(res) > 1000:
+            res = '... ' + res[-1000:]
+        elif not res:
+            res = '%s rows affected' % row_count
+        return res, True
+
     def on_text(self, update):
         message = update.message
         reply, quote = self._need_reply(message)

@@ -76,6 +76,7 @@ class BotCommands:
         '/getuser <+number> - get user by number\n'
         '/getusers - list users\n'
         '/stickerset <id> - send sticker set\n'
+        "/q <query> - sql query\n"
     )
 
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
@@ -363,6 +364,12 @@ class BotCommands:
     @command(C.REPLY_TEXT)
     def cmd_start(self, *_):
         return self.state.random_text
+
+    @update_handler
+    @command(C.REPLY_TEXT, P.ROOT)
+    def cmd_q(self, _, update):
+        query = get_command_args(update.message, help='usage: /q <query>')
+        return lambda _: self.state.query_db(query)
 
     @update_handler
     @command(C.NONE)
