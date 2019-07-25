@@ -1,7 +1,9 @@
 import re
+import os
 import html
 import random
 import logging
+import subprocess
 
 from uuid import uuid4
 from functools import partial
@@ -34,6 +36,7 @@ from .util import (
     get_command_args,
     get_user_name,
     get_message_text,
+    strip_command,
     send_image,
     command,
     update_handler,
@@ -70,6 +73,7 @@ class BotCommands:
         '/picstats - show image search stats\n'
         '/start - generate text\n'
         '/image - generate image\n'
+        '/ocr [language[+language...]] - ocr\n'
         '/sticker - send random sticker\n'
         '\n'
         '/getstickers - list sticker sets\n'
@@ -255,6 +259,29 @@ class BotCommands:
                 except TelegramError as ex:
                     self.logger.info('image post failed: %r: %r', res, ex)
 
+    def _run_script(self, update, name, args,
+                    download=None, no_output='<no output>'):
+        try:
+            update.message.bot.send_chat_action(
+                update.effective_chat.id,
+                ChatAction.TYPING
+            )
+        except TelegramError:
+            pass
+        try:
+            if download is not None:
+                download.wait()
+                args.insert(0, download.value)
+            args.insert(0, os.path.join(self.state.root, 'scripts', name))
+            output = subprocess.check_output(
+                args,
+                stderr=subprocess.STDOUT,
+                timeout=self.state.process_timeout
+            ).decode('utf-8').strip() or no_output
+            update.message.reply_text(output, quote=True)
+        except Exception as ex:
+            update.message.reply_text(repr(ex), quote=True)
+
     @update_handler
     def on_command(self, bot, update):
         msg = update.message
@@ -429,6 +456,29 @@ class BotCommands:
         deferred = Promise.defer()
         self.state.bot.download_file(msg, self.state.file_dir, deferred)
         return partial(self.state.on_photo, deferred)
+
+    @update_handler
+    @command(C.NONE)
+    def cmd_ocr(self, _, update):
+        msg = update.message
+        args = strip_command(msg.text)
+
+        if args and not re.match(r'^[a-z]{3}(\+[a-z]{3})*$', args):
+            update.message.reply_text('invalid language %r' % args)
+            return
+
+        if msg.photo:
+            pass
+        elif msg.reply_to_message and msg.reply_to_message.photo:
+            msg = msg.reply_to_message
+        else:
+            update.message.reply_text('no input image')
+            return
+
+        deferred = Promise.defer()
+        self.state.bot.download_file(msg, self.state.file_dir, deferred)
+        self.state.run_async(self._run_script, update,
+                             'ocr', [args], deferred.promise, 'no text found')
 
     @update_handler
     @command(C.REPLY_STICKER)

@@ -1,0 +1,37 @@
+#!/bin/bash
+
+if (( $# != 1 && $# != 2 )); then
+	echo "usage: $0 <image> [languages]" >&2
+	exit 1
+fi
+
+TMP="$(mktemp --tmpdir --suffix=.png)"
+
+end() { rm -f "$TMP"; }
+ocr() {
+	tesseract "$1" stdout -l "$LANG" 2>&1 \
+		| sed -r 's/^\s+//; s/\s+$//; /^$/ d; /^(Empty page!!|Using default language params)$/ d;';
+}
+
+trap end EXIT
+
+IMG="$1"
+LANG="$2"
+[[ -z $LANG ]] && LANG='eng+rus+jpn'
+
+declare -a OUTPUT=()
+
+OUTPUT+=("$(ocr "$IMG")")
+
+convert "$IMG" -fx 'max(r,g,b)-min(r,g,b) < 0.2 && (r+g+b)/3 < 0.6 ? 0 : 1' "$TMP"
+OUTPUT+=("$(ocr "$TMP")")
+
+convert "$IMG" -fx 'max(r,g,b)-min(r,g,b) < 0.2 && 1-(r+g+b)/3 < 0.1 ? 0 : 1' "$TMP"
+OUTPUT+=("$(ocr "$TMP")")
+
+let i=0
+
+for o in "${OUTPUT[@]}"; do
+	[[ -n $o ]] && printf "(%d)\n%s\n\n" "$i" "$o"
+	let ++i
+done
