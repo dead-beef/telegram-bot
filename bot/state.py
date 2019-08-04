@@ -29,7 +29,7 @@ from .search import Search
 
 class BotState:
     ASYNC_MAX_DEFAULT = 4
-    PROCESS_TIMEOUT_DEFAULT = 30
+    PROCESS_TIMEOUT_DEFAULT = 60
 
     def __init__(self,
                  bot, id_, username,
