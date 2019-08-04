@@ -304,7 +304,7 @@ class BotCommands:
         match = self.RE_COMMAND.match(msg)
         if match is None:
             self.logger.warning('!match command %s', msg)
-        handler = 'cmd_' + match.group(1)
+        handler = 'cmd_' + match.group(1).lower()
 
         try:
             handler = getattr(self, handler)
