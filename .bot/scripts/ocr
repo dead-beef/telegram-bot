@@ -6,11 +6,22 @@ if (( $# != 1 && $# != 2 )); then
 fi
 
 TMP="$(mktemp --tmpdir --suffix=.png)"
+START_TIME="$(date +%s)"
+MAX_TIME=60
 
 end() { rm -f "$TMP"; }
 ocr() {
 	tesseract "$1" stdout -l "$LANG" 2>&1 \
 		| sed -r 's/^\s+//; s/\s+$//; /^$/ d; /^(Empty page!!|Using default language params)$/ d;';
+}
+dtime() {
+    echo $(( $(date +%s) - START_TIME ))
+}
+dtimebreak() {
+	if (( $(dtime) >= $1 )); then
+		printf '<timeout>\n'
+		exit 0
+	fi
 }
 
 trap end EXIT
@@ -19,19 +30,20 @@ IMG="$1"
 LANG="$2"
 [[ -z $LANG ]] && LANG='eng+rus+jpn'
 
-declare -a OUTPUT=()
-
-OUTPUT+=("$(ocr "$IMG")")
+output="$(ocr "$IMG")"
+[[ -z $output ]] && output="<no text found>"
+printf "(0)\n%s\n\n" "$output"
+dtimebreak $(( MAX_TIME / 2 - 1 ))
 
 convert "$IMG" -fx 'max(r,g,b)-min(r,g,b) < 0.2 && (r+g+b)/3 < 0.6 ? 0 : 1' "$TMP"
-OUTPUT+=("$(ocr "$TMP")")
+dtimebreak $(( MAX_TIME / 2 - 1 ))
+output="$(ocr "$TMP")"
+[[ -z $output ]] && output="<no text found>"
+printf "(1)\n%s\n\n" "$output"
+dtimebreak $(( MAX_TIME * 2 / 3 - 1 ))
 
 convert "$IMG" -fx 'max(r,g,b)-min(r,g,b) < 0.2 && 1-(r+g+b)/3 < 0.1 ? 0 : 1' "$TMP"
-OUTPUT+=("$(ocr "$TMP")")
-
-let i=0
-
-for o in "${OUTPUT[@]}"; do
-	[[ -n $o ]] && printf "(%d)\n%s\n\n" "$i" "$o"
-	let ++i
-done
+dtimebreak $(( MAX_TIME * 2 / 3 - 1 ))
+output="$(ocr "$TMP")"
+[[ -z $output ]] && output="<no text found>"
+printf "(2)\n%s\n\n" "$output"
