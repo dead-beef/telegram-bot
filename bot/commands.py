@@ -81,7 +81,8 @@ class BotCommands:
         '/getuser <+number> - get user by number\n'
         '/getusers - list users\n'
         '/stickerset <id> - send sticker set\n'
-        "/q <query> - sql query\n"
+        '/q <query> - sql query\n'
+        '/qr <query> - sql query (read only)\n'
     )
 
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
@@ -398,6 +399,13 @@ class BotCommands:
     def cmd_q(self, _, update):
         query = get_command_args(update.message, help='usage: /q <query>')
         return lambda _: self.state.query_db(query)
+
+    @update_handler
+    @command(C.REPLY_TEXT, P.USER_2)
+    def cmd_qr(self, _, update):
+        query = get_command_args(update.message, help='usage: /qr <query>')
+        self.state.run_async(self._run_script, update,
+                             'query', [query], timeout=5)
 
     @update_handler
     @command(C.NONE)
