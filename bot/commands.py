@@ -261,7 +261,7 @@ class BotCommands:
                     self.logger.info('image post failed: %r: %r', res, ex)
 
     def _run_script(self, update, name, args,
-                    download=None, no_output='<no output>'):
+                    download=None, no_output='<no output>', timeout=None):
         try:
             update.message.bot.send_chat_action(
                 update.effective_chat.id,
@@ -277,7 +277,7 @@ class BotCommands:
             output = subprocess.check_output(
                 args,
                 stderr=subprocess.STDOUT,
-                timeout=self.state.process_timeout
+                timeout=timeout or self.state.process_timeout
             ).decode('utf-8').strip() or no_output
             update.message.reply_text(trunc(output), quote=True)
         except Exception as ex:
