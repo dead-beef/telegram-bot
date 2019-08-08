@@ -35,6 +35,7 @@ class BotDatabase:
         '  `last_update` INTEGER NOT NULL DEFAULT 0'
         ')',
         'CREATE TABLE IF NOT EXISTS `message` ('
+        '  `id` INTEGER NOT NULL DEFAULT -1,'
         '  `chat_id` REFERENCES `chat`(`id`),'
         '  `user_id` REFERENCES `user`(`id`),'
         '  `timestamp` INTEGER NOT NULL,'
@@ -381,6 +382,7 @@ class BotDatabase:
         if message.contact is not None:
             return self.learn_contact(message.contact)
 
+        msg_id = message.message_id
         chat_id = message.chat.id
         if message.from_user is None:
             user_id = None
@@ -405,11 +407,11 @@ class BotDatabase:
 
         self.cursor.execute(
             'INSERT INTO `message`'
-            ' (`chat_id`, `user_id`, `timestamp`,'
+            ' (`id`, `chat_id`, `user_id`, `timestamp`,'
             ' `text`, `file_id`, `file_path`,'
             ' `file_name`, `sticker_id`)'
-            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (chat_id, user_id, timestamp,
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (msg_id, chat_id, user_id, timestamp,
              text, file_id, file_path,
              file_name, sticker_id)
         )
