@@ -53,6 +53,7 @@ class Permission(enum.IntEnum):
     IGNORED = -2
     BANNED = -1
     USER = 0
+    USER_2 = 1
     ADMIN = 255
     ROOT = 256
 
@@ -177,6 +178,11 @@ def configure_logger(name,
 
 def is_phone_number(string):
     return RE_PHONE_NUMBER.match(string)
+
+def trunc(string, max_length=1000):
+    if len(string) > max_length:
+        return '... ' + string[4 - max_length:]
+    return string
 
 def remove_control_chars(string):
     return ''.join(

@@ -32,6 +32,7 @@ from .safe_eval import safe_eval
 from .error import CommandError, SearchError
 from .promise import Promise, PromiseType as PT
 from .util import (
+    trunc,
     remove_control_chars,
     get_command_args,
     get_user_name,
@@ -278,7 +279,7 @@ class BotCommands:
                 stderr=subprocess.STDOUT,
                 timeout=self.state.process_timeout
             ).decode('utf-8').strip() or no_output
-            update.message.reply_text(output, quote=True)
+            update.message.reply_text(trunc(output), quote=True)
         except Exception as ex:
             update.message.reply_text(repr(ex), quote=True)
 

@@ -13,6 +13,7 @@ from telegram import ChatAction, TelegramError, ParseMode
 from telegram.ext import Dispatcher
 
 from .util import (
+    trunc,
     strip_command,
     get_message_text,
     get_message_filename,
@@ -436,10 +437,10 @@ class BotState:
         self.db.save()
         rows = self.db.cursor.fetchall()
         res = '\n'.join(' '.join(repr(col) for col in row) for row in rows)
-        if len(res) > 1000:
-            res = '... ' + res[-1000:]
-        elif not res:
+        if not res:
             res = '%s rows affected' % row_count
+        else:
+            res = trunc(res)
         return res, True
 
     def on_text(self, update):
