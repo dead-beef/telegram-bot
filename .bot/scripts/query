@@ -2,5 +2,5 @@
 
 dir="$(dirname $(dirname $(readlink -f ${BASH_SOURCE[0]})))"
 db="file:${dir}/bot.db?mode=ro"
-sqlite3 -nullvalue None -separator ' | ' "$db" "$1"
+sqlite3 -cmd '.timeout 2000' -nullvalue None -separator ' | ' "$db" "$1"
 exit 0
