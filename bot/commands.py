@@ -292,7 +292,10 @@ class BotCommands:
 
         text = get_message_text(msg)
         if msg.reply_to_message and self.RE_COMMAND_NO_ARGS.match(text):
-            text = ' '.join((text, get_message_text(msg.reply_to_message)))
+            text = ' '.join((
+                text,
+                strip_command(get_message_text(msg.reply_to_message))
+            ))
 
         aliases = self._get_chat_settings(msg.chat)['aliases']
         msg = text
