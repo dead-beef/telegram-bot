@@ -74,7 +74,8 @@ class BotDatabase:
         'CREATE TABLE IF NOT EXISTS `search_log` ('
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
         '  `search_query_id` REFERENCES `search_query`(`id`),'
-        '  `user_id` REFERENCES `user`(`id`)'
+        '  `user_id` REFERENCES `user`(`id`),'
+        '  `timestamp` INTEGER NOT NULL DEFAULT 0'
         ')',
         'CREATE INDEX IF NOT EXISTS `chat_user_id` ON `chat_user` (`user_id`)',
         'CREATE INDEX IF NOT EXISTS `chat_message` ON `message` (`chat_id`)',
@@ -463,8 +464,8 @@ class BotDatabase:
                 break
         self.cursor.execute(
             'INSERT INTO `search_log`'
-            ' (`search_query_id`, `user_id`)'
-            ' VALUES(?, ?)',
-            (query_id, user.id)
+            ' (`search_query_id`, `user_id`, `timestamp`)'
+            ' VALUES(?, ?, ?)',
+            (query_id, user.id, int(time.time() * 1000))
         )
         self.db.commit()
