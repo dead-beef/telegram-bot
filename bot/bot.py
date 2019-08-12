@@ -45,7 +45,7 @@ class Bot:
         )
 
         self.tokens = [token.strip() for token in tokens]
-        self.proxy = proxy.strip()
+        self.proxy = proxy.strip() if proxy is not None else None
         self.log_messages = log_messages
         self.queue = Queue()
         self.stopped = Event()
