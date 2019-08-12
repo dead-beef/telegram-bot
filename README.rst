@@ -56,6 +56,13 @@ Usage
       --log-level {critical,error,warning,info,debug}
                             log level (default: info)
 
+
+::
+
+    > python -m bot.merge_db -h
+    usage: merge_db.py <dest_db> <src_db>
+
+
 Licenses
 --------
 
