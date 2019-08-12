@@ -59,6 +59,10 @@ def main(args=None):
     else:
         args.token = [args.token]
 
+    args.proxy = args.proxy.strip()
+    if not args.proxy or args.proxy.lower() == 'none':
+        args.proxy = None
+
     args.log_level = getattr(logging, args.log_level.upper())
     args.log_messages = args.message_log != 'none'
 
