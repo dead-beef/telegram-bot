@@ -86,6 +86,65 @@ class BotDatabase:
         'CREATE INDEX IF NOT EXISTS `search_log_user` ON `search_log` (`user_id`)'
     ]
 
+    MERGE = [
+        'INSERT OR REPLACE INTO `user`'
+        ' SELECT `new`.*'
+        ' FROM `to_merge`.`user` `new`'
+        ' LEFT JOIN `user` `old`'
+        ' ON `new`.`id`=`old`.`id`'
+        ' WHERE `old`.`id` IS NULL OR `new`.`last_update` > `old`.`last_update`',
+
+        'INSERT OR REPLACE INTO `user_phone`'
+        ' SELECT `new`.*'
+        ' FROM `to_merge`.`user_phone` `new`'
+        ' LEFT JOIN `user_phone` `old`'
+        ' ON `new`.`user_id`=`old`.`user_id`'
+        ' AND `new`.`phone_number`=`old`.`phone_number`'
+        ' WHERE `old`.`user_id` IS NULL'
+        ' OR `new`.`timestamp` > `old`.`timestamp`',
+
+        'INSERT OR REPLACE INTO `chat`'
+        ' SELECT `new`.*'
+        ' FROM `to_merge`.`chat` `new`'
+        ' LEFT JOIN `chat` `old`'
+        ' ON `new`.`id`=`old`.`id`'
+        ' WHERE `old`.`id` IS NULL'
+        ' OR `new`.`last_update` > `old`.`last_update`',
+
+        'INSERT OR REPLACE INTO `message`'
+        ' SELECT `new`.*'
+        ' FROM `to_merge`.`message` `new`'
+        ' WHERE `timestamp` > (SELECT MAX(`timestamp`) FROM `message`)',
+
+        'INSERT OR REPLACE INTO `sticker_set`'
+        ' SELECT `new`.*'
+        ' FROM `to_merge`.`sticker_set` `new`'
+        ' LEFT JOIN `sticker_set` `old`'
+        ' ON `new`.`id`=`old`.`id`'
+        ' WHERE `old`.`id` IS NULL'
+        ' OR `new`.`last_update` > `old`.`last_update`',
+
+        'INSERT OR REPLACE INTO `sticker`'
+        ' SELECT `new`.*'
+        ' FROM `to_merge`.`sticker` `new`',
+
+        'INSERT INTO `search_query` (`query`)'
+        ' SELECT `new`.`query`'
+        ' FROM `to_merge`.`search_query` `new`'
+        ' LEFT JOIN `search_query` `old`'
+        ' ON `new`.`query` = `old`.`query`'
+        ' WHERE `old`.`id` IS NULL',
+
+        'INSERT INTO `search_log` (`search_query_id`, `user_id`, `timestamp`)'
+        ' SELECT `sq`.`id`, `new`.`user_id`, `new`.`timestamp`'
+        ' FROM `to_merge`.`search_log` `new`'
+        ' LEFT JOIN `to_merge`.`search_query` `new_sq`'
+        ' ON `new`.`search_query_id` = `new_sq`.`id`'
+        ' LEFT JOIN `search_query` `sq`'
+        ' ON `new_sq`.`query` = `sq`.`query`'
+        ' WHERE `new`.`timestamp` > (SELECT MAX(`timestamp`) FROM `search_log`)'
+    ]
+
     def __init__(self, path,
                  user_update_interval=86400,
                  chat_update_interval=86400,
@@ -136,6 +195,20 @@ class BotDatabase:
 
     def save(self):
         self.db.commit()
+
+    def merge(self, db):
+        self.cursor.execute('ATTACH ? AS to_merge', (db,))
+        self.cursor.execute('BEGIN')
+        try:
+            for cmd in self.MERGE:
+                self.cursor.execute(cmd)
+        except BaseException as ex:
+            self.cursor.execute('ROLLBACK')
+            raise type(ex)(cmd, ex)
+        else:
+            self.cursor.execute('COMMIT')
+        finally:
+            self.cursor.execute('DETACH to_merge')
 
     def get_user_data(self, user, fields='*'):
         return self._get_item_data(
