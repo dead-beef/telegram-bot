@@ -1,6 +1,5 @@
 import re
 import os
-import html
 import random
 import logging
 import subprocess
@@ -43,6 +42,7 @@ from .util import (
     update_handler,
     is_phone_number,
     reply_sticker_set,
+    reply_photo,
     CommandType as C,
     Permission as P
 )
@@ -83,6 +83,7 @@ class BotCommands:
         '/stickerset <id> - send sticker set\n'
         '/q <query> - sql query\n'
         '/qr <query> - sql query (read only)\n'
+        '/qplot <query> - sql query plot (read only)\n'
     )
 
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
@@ -262,27 +263,47 @@ class BotCommands:
                     self.logger.info('image post failed: %r: %r', res, ex)
 
     def _run_script(self, update, name, args,
-                    download=None, no_output='<no output>', timeout=None):
+                    download=None, no_output='<no output>',
+                    return_image=False, timeout=None):
         try:
             update.message.bot.send_chat_action(
                 update.effective_chat.id,
-                ChatAction.TYPING
+                ChatAction.UPLOAD_PHOTO if return_image
+                else ChatAction.TYPING
             )
         except TelegramError:
             pass
         try:
+            tmp = None
+
+            if return_image:
+                tmp = '%s_%s_plot.jpg' % (
+                    update.effective_chat.id,
+                    update.message.message_id
+                )
+                args = [tmp if arg == '{{TMP}}' else arg for arg in args]
+
             if download is not None:
                 download.wait()
                 args.insert(0, download.value)
+
             args.insert(0, os.path.join(self.state.root, 'scripts', name))
+
             output = subprocess.check_output(
                 args,
                 stderr=subprocess.STDOUT,
                 timeout=timeout or self.state.process_timeout
             ).decode('utf-8').strip() or no_output
-            update.message.reply_text(trunc(output), quote=True)
+
+            if return_image and os.path.exists(tmp):
+                reply_photo(update, tmp, quote=True)
+            else:
+                update.message.reply_text(trunc(output), quote=True)
         except Exception as ex:
             update.message.reply_text(repr(ex), quote=True)
+        finally:
+            if tmp is not None:
+                os.remove(tmp)
 
     @update_handler
     def on_command(self, bot, update):
@@ -404,11 +425,19 @@ class BotCommands:
         return lambda _: self.state.query_db(query)
 
     @update_handler
-    @command(C.REPLY_TEXT, P.USER_2)
+    @command(C.NONE, P.USER_2)
     def cmd_qr(self, _, update):
         query = get_command_args(update.message, help='usage: /qr <query>')
         self.state.run_async(self._run_script, update,
-                             'query', [query], timeout=5)
+                             'query', [query], timeout=self.state.query_timeout)
+
+    @update_handler
+    @command(C.NONE, P.USER_2)
+    def cmd_qplot(self, _, update):
+        query = get_command_args(update.message, help='usage: /qplot <query>')
+        self.state.run_async(self._run_script, update,
+                             'qplot', ['-o', '{{TMP}}', query],
+                             timeout=self.state.query_timeout)
 
     @update_handler
     @command(C.NONE)

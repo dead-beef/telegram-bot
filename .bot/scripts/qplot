@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+
+try:
+    import pylab
+except ImportError:
+    pylab = None
+
+
+DATA_FMT_ERROR = (
+    'Invalid data format. Supported formats:'
+    ' (x, y), (key, value), (key, x, y)'
+)
+
+
+def check_row_format(row):
+    try:
+        if len(row) == 2:
+            key = row[0]
+            _ = float(row[1])
+            if isinstance(key, str):
+                return
+            key = float(key)
+        elif len(row) == 3:
+            _ = str(row[0])
+            _ = float(row[1])
+            _ = float(row[2])
+            return
+    except Exception as ex:
+        raise ValueError(DATA_FMT_ERROR, ex)
+    raise ValueError(DATA_FMT_ERROR)
+
+
+def plot(data, fname=None):
+    if pylab is None:
+        raise RuntimeError('matplotlib is not installed')
+    if not data:
+        raise ValueError('no data')
+    check_row_format(data[0])
+
+    try:
+        pylab.grid(True)
+
+        if len(data[0]) == 2:
+            xs = [d[0] for d in data]
+            ys = [d[1] for d in data]
+            if isinstance(xs[0], str):
+                pylab.xticks(rotation=90)
+                pylab.subplots_adjust(
+                    bottom=0.02 * max(len(key) for key in xs), top=0.9,
+                    left=0.1, right=0.9
+                )
+                pylab.bar(xs, ys)
+            else:
+                pylab.plot(xs, ys)
+        elif len(data[0]) == 3:
+            plot_data = {}
+            plots = []
+            keys = []
+
+            for key, x, y in data:
+                try:
+                    plot_data[key][0].append(x)
+                    plot_data[key][1].append(y)
+                except KeyError:
+                    plot_data[key] = ([x], [y])
+
+            for key, args in plot_data.items():
+                plt, = pylab.plot(*args, label=key)
+                plots.append(plt)
+                keys.append(key)
+
+            pylab.legend(plots, keys)
+
+        if fname is None:
+            pylab.show()
+        else:
+            pylab.savefig(fname, dpi=200)
+    finally:
+        pylab.close()
+
+
+def main():
+    import os
+    import sqlite3
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('-d', '--database',
+                        default=os.path.expanduser('~/.bot/bot.db'),
+                        help='database to query')
+    parser.add_argument('-o', '--output', default=None,
+                        help='output file')
+    parser.add_argument('query')
+
+    args = parser.parse_args()
+    db = sqlite3.connect('file:%s?mode=ro' % args.database, uri=True)
+    cursor = db.cursor()
+    cursor.execute(args.query)
+    plot(cursor.fetchall(), args.output)
+
+
+if __name__ == '__main__':
+    main()

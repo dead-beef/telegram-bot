@@ -31,12 +31,14 @@ from .search import Search
 class BotState:
     ASYNC_MAX_DEFAULT = 4
     PROCESS_TIMEOUT_DEFAULT = 60
+    QUERY_TIMEOUT_DEFAULT = 5
 
     def __init__(self,
                  bot, id_, username,
                  root=None,
                  async_max=ASYNC_MAX_DEFAULT,
                  process_timeout=PROCESS_TIMEOUT_DEFAULT,
+                 query_timeout=QUERY_TIMEOUT_DEFAULT,
                  proxy=None):
         if root is None:
             root = os.path.expanduser('~/.bot')
@@ -70,6 +72,7 @@ class BotState:
         self.async_running = 0
         self.async_max = async_max
         self.process_timeout = process_timeout
+        self.query_timeout = query_timeout
 
         os.makedirs(self.default_file_dir, exist_ok=True)
         for type_ in FILE_TYPES:

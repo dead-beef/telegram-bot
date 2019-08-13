@@ -32,7 +32,8 @@ setup(name='telegram-bot',
           'pysocks',
           'markovchain>=0.2.5',
           'dice',
-          'urllib3[socks]'
+          'urllib3[socks]',
+          'matplotlib'
       ],
       extras_require={
           'dev': [
