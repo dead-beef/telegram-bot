@@ -277,10 +277,10 @@ class BotCommands:
             tmp = None
 
             if return_image:
-                tmp = '%s_%s_plot.jpg' % (
+                tmp = os.path.join(self.state.tmp_dir, '%s_%s_plot.jpg' % (
                     update.effective_chat.id,
                     update.message.message_id
-                )
+                ))
                 args = [tmp if arg == '{{TMP}}' else arg for arg in args]
 
             if download is not None:
@@ -303,7 +303,10 @@ class BotCommands:
             update.message.reply_text(repr(ex), quote=True)
         finally:
             if tmp is not None:
-                os.remove(tmp)
+                try:
+                    os.remove(tmp)
+                except FileNotFoundError:
+                    pass
 
     @update_handler
     def on_command(self, bot, update):
