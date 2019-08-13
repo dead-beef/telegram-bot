@@ -437,6 +437,7 @@ class BotCommands:
         query = get_command_args(update.message, help='usage: /qplot <query>')
         self.state.run_async(self._run_script, update,
                              'qplot', ['-o', '{{TMP}}', query],
+                             return_image=True,
                              timeout=self.state.query_timeout)
 
     @update_handler
