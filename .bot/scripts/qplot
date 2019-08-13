@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 try:
+    import matplotlib as mpl
+    mpl.use('Agg')
     import pylab
 except ImportError:
     pylab = None
@@ -100,4 +102,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as ex:
+        print(repr(ex))
