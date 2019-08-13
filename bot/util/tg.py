@@ -1,29 +1,24 @@
 import os
 import re
-import enum
 import logging
 import subprocess
-import unicodedata
 from time import sleep
 from functools import wraps
-from itertools import chain
-from html.parser import HTMLParser
 
 import dice
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ChatAction,
-    TelegramError,
-    ParseMode
+    TelegramError
 )
 
-from .error import BotError, CommandError
-from .promise import Promise, PromiseType as PT
+from bot.error import BotError, CommandError
+from bot.promise import Promise, PromiseType as PT
 
-
-def re_list_compile(re_list):
-    return [(re.compile(expr), repl) for expr, repl in re_list]
+from .enums import Permission, CommandType
+from .string import match_command_user, strip_command
+from .misc import chunks
 
 
 LOGGER = logging.getLogger(__name__)
@@ -31,190 +26,10 @@ LOGGER = logging.getLogger(__name__)
 RE_COMMAND = re.compile(r'^/[^\s]+\s*')
 RE_COMMAND_USERNAME = re.compile(r'^/[^@\s]+@([^\s]+)\s*')
 
-RE_PHONE_NUMBER = re.compile(r'^\+[0-9]+$')
-
 RE_ANIMATION_URL = re.compile(r'^[^?&]*\.gif([?&].*)?$', re.I)
-
-RE_SANITIZE_MSG = re_list_compile([
-    (r'<LF>', '[LF]'),
-    (r'\n+', ' <LF> '),
-    (r'\s+', ' ')
-])
-
-RE_SANITIZE = RE_SANITIZE_MSG + re_list_compile([
-    (r'[][|]', '.')
-])
-
 
 FILE_TYPES = ['video', 'audio', 'document', 'voice', 'photo']
 
-
-class Permission(enum.IntEnum):
-    IGNORED = -2
-    BANNED = -1
-    USER = 0
-    USER_2 = 1
-    ADMIN = 255
-    ROOT = 256
-
-
-class CommandType(enum.IntEnum):
-    NONE = 0
-    REPLY_TEXT = 1
-    REPLY_STICKER = 2
-    GET_OPTIONS = 3
-    SET_OPTION = 4
-    REPLY_TEXT_PAGINATED = 5
-
-
-class HTMLFlattenParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.result = ''
-        self.tags = []
-        self.current_tag = None
-        self.current_tag_start = None
-
-    def handle_starttag(self, tag, attrs):
-        tag_start = self.get_starttag_text()
-        if self.current_tag is not None:
-            self.tags.append((self.current_tag, self.current_tag_start))
-            self.result += '</%s>' % self.current_tag
-        self.current_tag, self.current_tag_start = tag, tag_start
-        self.result += tag_start
-
-    def handle_endtag(self, tag):
-        if self.current_tag is None:
-            return
-        self.result += '</%s>' % self.current_tag
-        self.current_tag = None
-        if self.tags:
-            self.current_tag, self.current_tag_start = self.tags.pop()
-            self.result += self.current_tag_start
-
-    def handle_data(self, data):
-        self.result += data
-
-    def handle_entityref(self, name):
-        self.result += '&%s;' % name
-
-    def handle_charref(self, name):
-        self.result += '&%s;' % name
-
-    def close(self):
-        super().close()
-        self.tags = []
-        if self.current_tag is not None:
-            self.result += '</%s>' % self.current_tag
-            self.current_tag = None
-
-
-def chunks(list_, size):
-    for i in range(0, len(list_), size):
-        yield list_[i:i + size]
-
-def srange(x, y, maxlen=None):
-    if len(x) != len(y):
-        raise ValueError('srange string length is not equal')
-    if x > y:
-        x, y = y, x
-    elif x == y:
-        yield x
-        return
-    prefix = os.path.commonprefix((x, y))
-    suffix = len(x) - len(prefix)
-    x = x[-suffix:]
-    y = y[-suffix:]
-    if not (x.isdigit() and y.isdigit()):
-        raise ValueError('invalid range: %r - %r' % (x, y))
-    x = int(x, 10)
-    y = int(y, 10) + 1
-    if maxlen is not None and y - x > maxlen:
-        raise ValueError('invalid range length: %d > %d' % (y - x, maxlen))
-    for i in range(x, y):
-        yield '%s%0*d' % (prefix, suffix, i)
-
-def intersperse(*seq):
-    return chain.from_iterable(zip(*seq))
-
-def _intersperse_printable(string, ins, after=True):
-    for x in string:
-        cat = unicodedata.category(x)
-        insert = x.isprintable() and (cat[0] not in 'MC' or cat == 'Cn')
-        if insert and not after:
-            yield ins
-        yield x
-        if insert and after:
-            yield ins
-
-def intersperse_printable(string, ins, after=True):
-    return ''.join(_intersperse_printable(string, ins, after))
-
-def flatten_html(data):
-    parser = HTMLFlattenParser()
-    parser.feed(data)
-    parser.close()
-    return parser.result
-
-
-def configure_logger(name,
-                     log_file=None,
-                     log_format=None,
-                     log_level=logging.INFO):
-    if isinstance(log_file, str):
-        handler = logging.FileHandler(log_file, 'a')
-    else:
-        handler = logging.StreamHandler(log_file)
-
-    formatter = logging.Formatter(log_format)
-    logger = logging.getLogger(name)
-
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(log_level)
-
-    return logger
-
-
-def is_phone_number(string):
-    return RE_PHONE_NUMBER.match(string)
-
-def trunc(string, max_length=1000):
-    if len(string) > max_length:
-        return '... ' + string[4 - max_length:]
-    return string
-
-def remove_control_chars(string):
-    return ''.join(
-        char for char, cat in ((c, unicodedata.category(c)) for c in string)
-        if cat[0] != 'C' or cat == 'Cn'
-    )
-
-def strip_command(string):
-    return RE_COMMAND.sub('', string).strip()
-
-def get_command_args(msg, nargs=1, help='missing command argument'):
-    if nargs != 1:
-        raise NotImplementedError('get_command_args nargs != 1')
-    args = strip_command(get_message_text(msg))
-    if not args:
-        raise CommandError(help)
-    return args
-
-def match_command_user(cmd, username):
-    match = RE_COMMAND_USERNAME.match(cmd)
-    if match is None:
-        return True
-    return match.group(1) == username
-
-def sanitize_log(string, is_message=False):
-    replace = RE_SANITIZE_MSG if is_message else RE_SANITIZE
-    for expr, repl in replace:
-        string = expr.sub(repl, string)
-    string = remove_control_chars(string).strip()
-    if not string:
-        string = '<empty>'
-    return string
 
 def get_chat_title(chat):
     if chat.title is not None:
@@ -246,6 +61,14 @@ def get_message_filename(message):
 
 def get_message_text(message):
     return message.text or message.caption or ''
+
+def get_command_args(msg, nargs=1, help='missing command argument'):
+    if nargs != 1:
+        raise NotImplementedError('get_command_args nargs != 1')
+    args = strip_command(get_message_text(msg))
+    if not args:
+        raise CommandError(help)
+    return args
 
 def get_file(message):
     for type_ in FILE_TYPES:
