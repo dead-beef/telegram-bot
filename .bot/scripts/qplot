@@ -47,12 +47,12 @@ def plot(data, fname=None):
             xs = [d[0] for d in data]
             ys = [d[1] for d in data]
             if isinstance(xs[0], str):
-                pylab.xticks(rotation=90)
+                pylab.xticks(range(len(xs)), xs, rotation=90)
                 pylab.subplots_adjust(
                     bottom=0.02 * max(len(key) for key in xs), top=0.9,
                     left=0.1, right=0.9
                 )
-                pylab.bar(xs, ys)
+                pylab.bar(range(len(xs)), ys)
             else:
                 pylab.plot(xs, ys)
         elif len(data[0]) == 3:
