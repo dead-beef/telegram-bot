@@ -84,8 +84,12 @@ def plot(data, fname=None):
 
 def main():
     import os
-    import sqlite3
     from argparse import ArgumentParser
+
+    try:
+        import pysqlite3 as sqlite3
+    except ImportError:
+        import sqlite3
 
     parser = ArgumentParser()
     parser.add_argument('-d', '--database',

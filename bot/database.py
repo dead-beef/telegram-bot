@@ -1,8 +1,12 @@
 import os
 import time
 import math
-import sqlite3
 import logging
+
+try:
+    import pysqlite3 as sqlite3
+except ImportError:
+    import sqlite3
 
 from .error import CommandError
 from .util import get_file, get_message_filename, Permission as P
