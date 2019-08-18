@@ -411,19 +411,6 @@ class BotDatabase:
                 (set_.name, set_.title, current_time, set_id)
             )
 
-        self.cursor.execute(
-            'INSERT OR REPLACE'
-            ' INTO `sticker_set` (`name`, `title`, `last_update`)'
-            ' VALUES (?, ?, ?)',
-            (set_.name, set_.title, current_time)
-        )
-        self.cursor.execute(
-            'SELECT `id` FROM `sticker_set` WHERE `name`=?',
-            (set_.name,)
-        )
-        row = self.cursor.fetchone()
-        set_id = row[0]
-
         for sticker in set_.stickers:
             self.cursor.execute(
                 'INSERT OR REPLACE'
