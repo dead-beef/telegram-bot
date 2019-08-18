@@ -120,17 +120,17 @@ class BotDatabase:
         ' FROM `to_merge`.`message` `new`'
         ' WHERE `timestamp` > (SELECT MAX(`timestamp`) FROM `message`)',
 
-        'INSERT OR REPLACE INTO `sticker_set`'
-        ' SELECT `new`.*'
-        ' FROM `to_merge`.`sticker_set` `new`'
-        ' LEFT JOIN `sticker_set` `old`'
-        ' ON `new`.`id`=`old`.`id`'
-        ' WHERE `old`.`id` IS NULL'
-        ' OR `new`.`last_update` > `old`.`last_update`',
+        #'INSERT OR REPLACE INTO `sticker_set`'
+        #' SELECT `new`.*'
+        #' FROM `to_merge`.`sticker_set` `new`'
+        #' LEFT JOIN `sticker_set` `old`'
+        #' ON `new`.`id`=`old`.`id`'
+        #' WHERE `old`.`id` IS NULL'
+        #' OR `new`.`last_update` > `old`.`last_update`',
 
-        'INSERT OR REPLACE INTO `sticker`'
-        ' SELECT `new`.*'
-        ' FROM `to_merge`.`sticker` `new`',
+        #'INSERT OR REPLACE INTO `sticker`'
+        #' SELECT `new`.*'
+        #' FROM `to_merge`.`sticker` `new`',
 
         'INSERT INTO `search_query` (`query`)'
         ' SELECT `new`.`query`'
@@ -347,10 +347,10 @@ class BotDatabase:
 
     def need_sticker_set(self, name):
         self.cursor.execute(
-            'SELECT COUNT(*) FROM `sticker_set` WHERE `name`=?',
+            'SELECT last_update FROM `sticker_set` WHERE `name`=?',
             (name,)
         )
-        res = self.cursor.fetchone()[0]
+        res = self.cursor.fetchone()
         self.logger.info('need_sticker_set: name=%s count=%s', name, res)
         if res:
             raise CommandError('sticker set exists')
