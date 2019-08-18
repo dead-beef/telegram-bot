@@ -63,13 +63,15 @@ class BotDatabase:
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
         '  `name` TEXT NOT NULL,'
         '  `title` TEXT NOT NULL,'
-        '  `last_update` INTEGER NOT NULL DEFAULT 0'
+        '  `last_update` INTEGER NOT NULL DEFAULT 0,'
+        '  UNIQUE (`name`)'
         ')',
         'CREATE TABLE IF NOT EXISTS `sticker` ('
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
-        '  `set` REFERENCES `sticker_set`(`id`),'
+        '  `set_id` REFERENCES `sticker_set`(`id`),'
         '  `file_id` TEXT NOT NULL,'
-        '  `emoji` TEXT'
+        '  `emoji` TEXT,'
+        '  UNIQUE (`set_id`, `file_id`)'
         ')',
         'CREATE TABLE IF NOT EXISTS `search_query` ('
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
@@ -152,7 +154,7 @@ class BotDatabase:
     def __init__(self, path,
                  user_update_interval=86400,
                  chat_update_interval=86400,
-                 sticker_set_update_interval=-1):
+                 sticker_set_update_interval=86400):
         self.logger = logging.getLogger(__name__)
         self.db_path = path
         self.db = sqlite3.connect(path)
@@ -260,7 +262,7 @@ class BotDatabase:
     def get_sticker_set(self, set_id):
         self.cursor.execute(
             'SELECT `file_id`'
-            ' FROM `sticker` WHERE `set`=?'
+            ' FROM `sticker` WHERE `set_id`=?'
             ' ORDER BY `id` ASC',
             (set_id,)
         )
@@ -347,14 +349,19 @@ class BotDatabase:
 
     def need_sticker_set(self, name):
         self.cursor.execute(
-            'SELECT last_update FROM `sticker_set` WHERE `name`=?',
+            'SELECT `last_update` FROM `sticker_set` WHERE `name`=?',
             (name,)
         )
         res = self.cursor.fetchone()
-        self.logger.info('need_sticker_set: name=%s count=%s', name, res)
-        if res:
-            raise CommandError('sticker set exists')
-        return True
+        self.logger.info('need_sticker_set: name=%s res=%r', name, res)
+        if res is None:
+            return True
+        if self.sticker_set_update_interval >= 0:
+            last_update = res[0]
+            current_time = int(time.time())
+            if current_time - last_update >= self.sticker_set_update_interval:
+                return True
+        raise CommandError('sticker set exists')
 
     def random_sticker(self):
         self.cursor.execute(
@@ -370,19 +377,25 @@ class BotDatabase:
             'learn_sticker_set: name=%s title=%s',
             set_.name, set_.title
         )
+
+        current_time = int(time.time())
+
         self.cursor.execute(
-            'INSERT INTO `sticker_set` (`name`, `title`) VALUES (?, ?)',
-            (set_.name, set_.title)
+            'INSERT OR REPLACE'
+            ' INTO `sticker_set` (`name`, `title`, `last_update`)'
+            ' VALUES (?, ?, ?)',
+            (set_.name, set_.title, current_time)
         )
         self.cursor.execute(
             'SELECT `id` FROM `sticker_set` WHERE `name`=?',
             (set_.name,)
         )
         set_id = self.cursor.fetchone()[0]
+
         for sticker in set_.stickers:
             self.cursor.execute(
-                'INSERT INTO'
-                ' `sticker` (`set`, `file_id`, `emoji`)'
+                'INSERT OR REPLACE'
+                ' INTO `sticker` (`set_id`, `file_id`, `emoji`)'
                 ' VALUES (?, ?, ?)',
                 (set_id, sticker.file_id, sticker.emoji)
             )
