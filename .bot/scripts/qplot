@@ -7,6 +7,8 @@ try:
 except ImportError:
     pylab = None
 
+import sqlite_functions as sqf
+
 
 DATA_FMT_ERROR = (
     'Invalid data format. Supported formats:'
@@ -101,6 +103,7 @@ def main():
 
     args = parser.parse_args()
     db = sqlite3.connect('file:%s?mode=ro' % args.database, uri=True)
+    sqf.create(db, sqf.MATH)
     cursor = db.cursor()
     cursor.execute(args.query)
     plot(cursor.fetchall(), args.output)

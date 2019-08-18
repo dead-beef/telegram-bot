@@ -1,6 +1,36 @@
-#!/bin/bash
+#!/usr/bin/env python3
 
-dir="$(dirname $(dirname $(readlink -f ${BASH_SOURCE[0]})))"
-db="file:${dir}/bot.db?mode=ro"
-sqlite3 -cmd '.timeout 2000' -nullvalue None -separator ' | ' "$db" "$1"
-exit 0
+import sqlite_functions as sqf
+
+
+def main():
+    import os
+    from argparse import ArgumentParser
+
+    try:
+        import pysqlite3 as sqlite3
+    except ImportError:
+        import sqlite3
+
+    parser = ArgumentParser()
+    parser.add_argument('-d', '--database',
+                        default=os.path.expanduser('~/.bot/bot.db'),
+                        help='database to query')
+    parser.add_argument('query')
+
+    args = parser.parse_args()
+    db = sqlite3.connect('file:%s?mode=ro' % args.database, uri=True)
+    sqf.create(db, sqf.MATH)
+    cursor = db.cursor()
+    cursor.execute(args.query)
+    print('\n'.join(
+        ' | '.join(str(col) for col in row)
+        for row in cursor.fetchall()
+    ))
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as ex:
+        print(repr(ex))
