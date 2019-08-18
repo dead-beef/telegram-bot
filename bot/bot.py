@@ -251,7 +251,7 @@ class Bot:
                 ptype=PT.MANUAL
             )
             get_sticker_set = need_sticker_set.then(
-                lambda _: bot.getStickerSet(sticker.set_name)
+                lambda res: bot.getStickerSet(sticker.set_name) if res else None
             )
             learn_sticker_set = get_sticker_set.then(
                 self.state.db.learn_sticker_set,
@@ -260,6 +260,11 @@ class Bot:
             self.queue.put(need_sticker_set)
             self.queue.put(learn_sticker_set)
             learn_sticker_set.wait()
+            if isinstance(learn_sticker_set.value, Exception):
+                self.logger.warning(
+                    'learn_sticker_set: error: %r',
+                    learn_sticker_set.value
+                )
         return self.state.on_sticker
 
     @update_handler

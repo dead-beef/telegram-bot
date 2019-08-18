@@ -75,7 +75,8 @@ class BotDatabase:
         ')',
         'CREATE TABLE IF NOT EXISTS `search_query` ('
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
-        '  `query` TEXT NOT NULL'
+        '  `query` TEXT NOT NULL,'
+        '  `offset` INTEGER NOT NULL DEFAULT 0'
         ')',
         'CREATE TABLE IF NOT EXISTS `search_log` ('
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
@@ -361,7 +362,7 @@ class BotDatabase:
             current_time = int(time.time())
             if current_time - last_update >= self.sticker_set_update_interval:
                 return True
-        raise CommandError('sticker set exists')
+        return False
 
     def random_sticker(self):
         self.cursor.execute(
@@ -373,12 +374,42 @@ class BotDatabase:
         return res[0]
 
     def learn_sticker_set(self, set_):
-        self.logger.info(
-            'learn_sticker_set: name=%s title=%s',
-            set_.name, set_.title
-        )
+        if set_ is None:
+            self.logger.info('not learning sticker set')
+            return
 
         current_time = int(time.time())
+
+        self.logger.info(
+            'learn_sticker_set: name=%s title=%s time=%s',
+            set_.name, set_.title, current_time
+        )
+
+        self.cursor.execute(
+            'SELECT `id` FROM `sticker_set` WHERE `name`=?',
+            (set_.name,)
+        )
+        row = self.cursor.fetchone()
+
+        if row is None:
+            self.cursor.execute(
+                'INSERT INTO `sticker_set` (`name`, `title`, `last_update`)'
+                ' VALUES (?, ?, ?)',
+                (set_.name, set_.title, current_time)
+            )
+            self.cursor.execute(
+                'SELECT `id` FROM `sticker_set` WHERE `name`=?',
+                (set_.name,)
+            )
+            set_id = self.cursor.fetchone()[0]
+        else:
+            set_id = row[0]
+            self.cursor.execute(
+                'UPDATE `sticker_set`'
+                ' SET `name`=?, `title`=?, `last_update`=?'
+                ' WHERE `id`=?',
+                (set_.name, set_.title, current_time, set_id)
+            )
 
         self.cursor.execute(
             'INSERT OR REPLACE'
@@ -390,7 +421,8 @@ class BotDatabase:
             'SELECT `id` FROM `sticker_set` WHERE `name`=?',
             (set_.name,)
         )
-        set_id = self.cursor.fetchone()[0]
+        row = self.cursor.fetchone()
+        set_id = row[0]
 
         for sticker in set_.stickers:
             self.cursor.execute(
