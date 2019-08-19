@@ -35,7 +35,7 @@ def check_row_format(row):
     raise ValueError(DATA_FMT_ERROR)
 
 
-def plot(data, fname=None):
+def plot(col_names, data, fname=None):
     if pylab is None:
         raise RuntimeError('matplotlib is not installed')
     if not data:
@@ -43,7 +43,12 @@ def plot(data, fname=None):
     check_row_format(data[0])
 
     try:
+        xtitle = col_names[-2]
+        ytitle = col_names[-1]
+
         pylab.grid(True)
+        pylab.xlabel(xtitle)
+        pylab.ylabel(ytitle)
 
         if len(data[0]) == 2:
             xs = [d[0] for d in data]
@@ -52,7 +57,7 @@ def plot(data, fname=None):
                 pylab.xticks(range(len(xs)), xs, rotation=90)
                 pylab.subplots_adjust(
                     bottom=0.02 * max(len(key) for key in xs), top=0.9,
-                    left=0.1, right=0.9
+                    left=0.15, right=0.9
                 )
                 pylab.bar(range(len(xs)), ys)
             else:
@@ -106,7 +111,11 @@ def main():
     sqf.create(db, sqf.MATH)
     cursor = db.cursor()
     cursor.execute(args.query)
-    plot(cursor.fetchall(), args.output)
+    plot(
+		[desc[0] for desc in cursor.description],
+		cursor.fetchall(),
+		args.output
+	)
 
 
 if __name__ == '__main__':
