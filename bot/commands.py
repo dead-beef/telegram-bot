@@ -167,7 +167,7 @@ class BotCommands:
         promise.wait()
         return promise.value
 
-    def _search(self, update, query):
+    def _search(self, update, query, reset=False):
         if update.callback_query:
             user = update.callback_query.from_user
             reply_to = None
@@ -177,10 +177,12 @@ class BotCommands:
 
         learn = Promise.wrap(
             self.state.db.learn_search_query,
-            query, user,
+            query, user, reset,
             ptype=PT.MANUAL
         )
         self.state.bot.queue.put(learn)
+        learn.wait()
+        offset = learn.value
 
         chat = update.effective_chat
         chat_id = chat.id
@@ -209,7 +211,7 @@ class BotCommands:
             self.logger.error('send_chat_action: %r', ex)
 
         try:
-            res = self.state.search(query)
+            res, is_last = self.state.search(query, offset)
         except SearchError as ex:
             primary_bot.send_message(
                 chat_id,
@@ -228,16 +230,15 @@ class BotCommands:
         else:
             keyboard = [
                 InlineKeyboardButton(
-                    '\U0001f517 %d' % (res.offset + 1),
+                    '\U0001f517 %d' % (offset + 1),
                     url=res.url
                 )
             ]
-            results = self.state.search[query]
-            if results.offset > 1:
+            if offset >= 1:
                 keyboard.append(
                     InlineKeyboardButton('reset', callback_data='picreset')
                 )
-            if results.offset < len(results.items) or not results.full:
+            if not is_last:
                 keyboard.append(
                     InlineKeyboardButton('next', callback_data='pic')
                 )
@@ -464,8 +465,7 @@ class BotCommands:
         if not update.callback_query.message:
             self.logger.info('cb_picreset no message')
         query = remove_control_chars(update.callback_query.message.caption)
-        self.state.search[query].offset = 0
-        self.state.run_async(self._search, update, query)
+        self.state.run_async(self._search, update, query, True)
 
     @update_handler
     @command(C.REPLY_TEXT_PAGINATED)

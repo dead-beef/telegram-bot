@@ -37,9 +37,7 @@ def request(http, method, url, **kwargs):
 class Search:
     DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; rv:60.0) Gecko/20100101 Firefox/60.0'
 
-    def __init__(self,
-                 throttle=1, wrap=25,
-                 proxy=None, headers=None):
+    def __init__(self, throttle=1, proxy=None, headers=None):
         if headers is None:
             headers = {}
         if 'User-Agent' not in headers:
@@ -50,7 +48,6 @@ class Search:
         self.http = get_proxy_manager(proxy)
         self.headers = headers
         self.throttle = throttle
-        self.wrap = wrap
         self.cache = defaultdict(SearchResults)
 
     def _request_json(self, results, url, fields=None):
@@ -67,6 +64,8 @@ class Search:
         except (KeyError, StopIteration):
             results.next_url = None
             results.full = True
+
+        results.full = True #
 
         for i, res in enumerate(data['results'], len(results.items)):
             try:
@@ -120,7 +119,7 @@ class Search:
         query = query.strip().lower()
         return self.cache[query]
 
-    def __call__(self, query):
+    def __call__(self, query, offset):
         with self.lock:
             self._throttle()
             query = query.strip().lower()
@@ -128,34 +127,34 @@ class Search:
             while True:
                 try:
                     self.logger.info('get next result %r', query)
-                    ret = results.next(self.wrap)
+                    ret = results[offset]
+                    break
                 except IndexError:
                     if results.full:
                         if not results.items:
                             self.logger.info('no results')
                             raise SearchError('no search results')
-                        self.logger.info('wrap')
-                        results.offset = 0
+                        self.logger.info('no more results')
+                        ret = results[-1]
+                        break
                     else:
                         self.logger.info('request more results')
                         self._request(query)
-                else:
-                    return ret
+            is_last = results.full and offset >= len(results) - 1
+            return ret, is_last
 
 
 class SearchResults:
     def __init__(self, results=None, full=False, next_url=None):
         self.items = results if results is not None else []
         self.full = full
-        self.offset = 0
         self.next_url = next_url
 
-    def next(self, wrap=0):
-        ret = self.items[self.offset]
-        self.offset += 1;
-        if wrap > 0:
-            self.offset %= wrap
-        return ret
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, i):
+        return self.items[i]
 
 
 class SearchResult:

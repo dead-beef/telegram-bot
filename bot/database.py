@@ -554,12 +554,12 @@ class BotDatabase:
             self.logger.error('learn_update: %r', ex)
             raise
 
-    def learn_search_query(self, query, user):
+    def learn_search_query(self, query, user, reset):
         query = query.strip().lower()
         self.learn_user(user)
         while True:
             self.cursor.execute(
-                'SELECT `id` FROM `search_query` WHERE `query`=?',
+                'SELECT `id`, `offset` FROM `search_query` WHERE `query`=?',
                 (query,)
             )
             row = self.cursor.fetchone()
@@ -569,8 +569,14 @@ class BotDatabase:
                     (query,)
                 )
             else:
-                query_id = row[0]
+                query_id, offset = row
                 break
+        if reset:
+            offset = 0
+        self.cursor.execute(
+            'UPDATE `search_log` SET `offset`=?  WHERE `id`=?',
+            (query_id, offset + 1)
+        )
         self.cursor.execute(
             'INSERT INTO `search_log`'
             ' (`search_query_id`, `user_id`, `timestamp`)'
@@ -578,3 +584,4 @@ class BotDatabase:
             (query_id, user.id, int(time.time() * 1000))
         )
         self.db.commit()
+        return offset
