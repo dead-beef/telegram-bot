@@ -574,8 +574,8 @@ class BotDatabase:
         if reset:
             offset = 0
         self.cursor.execute(
-            'UPDATE `search_log` SET `offset`=?  WHERE `id`=?',
-            (query_id, offset + 1)
+            'UPDATE `search_query` SET `offset`=?  WHERE `id`=?',
+            (offset + 1, query_id)
         )
         self.cursor.execute(
             'INSERT INTO `search_log`'
