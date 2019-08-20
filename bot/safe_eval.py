@@ -111,15 +111,25 @@ def create_safe_eval():
         lambda _, x, y: float(x) ** float(y),
         un
     )
-    mul = BinaryOp(
-        r'[*/]',
-        (lambda op, x, y: x * y if op == '*' else x / y),
+    div = BinaryOp(
+        r'/',
+        (lambda _, x, y: x / y),
         pow_
     )
-    add = BinaryOp(
-        r'[+-]',
-        (lambda op, x, y: x + y if op == '+' else x - y),
+    mul = BinaryOp(
+        r'\*',
+        (lambda _, x, y: x * y),
+        div
+    )
+    sub = BinaryOp(
+        r'-',
+        (lambda _, x, y: x - y),
         mul
+    )
+    add = BinaryOp(
+        r'\+',
+        (lambda _, x, y: x + y),
+        sub
     )
     expr = add
     paren.next_op = expr
