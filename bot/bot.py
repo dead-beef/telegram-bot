@@ -237,10 +237,10 @@ class Bot:
 
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)
-    def on_text(self, _, update):
+    def on_text(self, bot, update):
         if update.message is None:
             return None
-        return self._on_text
+        return partial(self._on_text, bot)
 
     @update_handler
     @command(C.REPLY_STICKER, P.IGNORED)
