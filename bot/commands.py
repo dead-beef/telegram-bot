@@ -420,7 +420,7 @@ class BotCommands:
     def cmd_alias(self, _, update):
         ret = '\n'.join(
             '%s. %s → %s' % (id_, expr, repl)
-            for id, expr, repl
+            for id_, expr, repl
             in self.state.db.get_chat_aliases(update.message.chat)
         )
         if not ret:
@@ -439,6 +439,7 @@ class BotCommands:
         repl = repl.strip()
         re.compile(expr)
         self.state.db.add_chat_alias(update.message.chat, expr, repl)
+        return '%s rows affected' % self.state.db.cursor.rowcount
 
     @command(C.REPLY_TEXT, P.ADMIN)
     def cmd_adel(self, _, update):
