@@ -271,15 +271,14 @@ def update_handler(method):
 
 
 def check_permission(bot, user, min_value=Permission.USER):
-    get_permission = Promise.wrap(
-        bot.state.db.get_user_data,
-        user,
-        'permission',
-        ptype=PT.MANUAL
-    )
-    bot.queue.put(get_permission)
-    get_permission.wait()
-    value = get_permission.value
+    get_permission = lambda: bot.state.db.get_user_data(user, 'permission')
+    try:
+        value = get_permission()
+    except Exception:
+        get_permission = Promise.wrap(get_permission, ptype=PT.MANUAL)
+        bot.queue.put(get_permission)
+        get_permission.wait()
+        value = get_permission.value
     if not isinstance(value, int):
         bot.logger.error('check_permission: %r', value)
         return False, True
