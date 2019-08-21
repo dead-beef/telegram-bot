@@ -54,6 +54,11 @@ class BotCommands:
         '/helptags - list formatter tags\n'
         '/helpemotes - list formatter emotes\n'
         '\n'
+        '/alias - list aliases\n'
+        '/aadd <regexp>=<string> - add alias\n'
+        '/adel <id> - delete alias\n'
+        '/aclear - delete all aliases\n'
+        '\n'
         '/setcontext - set generator context\n'
         '/setlearn - set learning mode\n'
         '/setorder - set markov chain order\n'
@@ -87,6 +92,7 @@ class BotCommands:
     )
 
     RE_DICE = re.compile(r'^\s*([0-9d][-+0-9duwtfrF%hml^ov ]*)')
+    RE_ALIAS = re.compile(r'^\s*(\S.*)=\s*(\S.*)$')
 
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
@@ -409,6 +415,42 @@ class BotCommands:
             return_image=True,
             timeout=self.state.query_timeout
         )
+
+    @command(C.REPLY_TEXT)
+    def cmd_alias(self, _, update):
+        ret = '\n'.join(
+            '%s. %s → %s' % (id_, expr, repl)
+            for id, expr, repl
+            in self.state.db.get_chat_aliases(update.message.chat)
+        )
+        if not ret:
+            ret = 'no aliases'
+        return ret, True
+
+    @command(C.REPLY_TEXT, P.ADMIN)
+    def cmd_aadd(self, _, update):
+        help_ = 'usage: /aadd <regexp>=<string>'
+        args = get_command_args(update.message, help=help_)
+        match = self.RE_ALIAS.match(args)
+        if match is None:
+            return help_
+        expr, repl = match.groups()
+        expr = expr.strip()
+        repl = repl.strip()
+        re.compile(expr)
+        self.state.db.add_chat_alias(update.message.chat, expr, repl)
+
+    @command(C.REPLY_TEXT, P.ADMIN)
+    def cmd_adel(self, _, update):
+        id_ = get_command_args(update.message, help='usage: /adel <id>')
+        id_ = int(id_)
+        self.state.db.delete_chat_alias(update.message.chat, id_)
+        return '%s rows affected' % self.state.db.cursor.rowcount
+
+    @command(C.REPLY_TEXT, P.ADMIN)
+    def cmd_aclear(self, _, update):
+        self.state.db.delete_chat_alias(update.message.chat, None)
+        return '%s rows affected' % self.state.db.cursor.rowcount
 
     @command(C.NONE)
     def cmd_pic(self, _, update):

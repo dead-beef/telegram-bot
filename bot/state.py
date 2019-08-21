@@ -123,7 +123,8 @@ class BotState:
         msg = update.message
         if not msg:
             return
-        aliases = self.get_chat_settings(msg.chat)['aliases']
+
+        chat = msg.chat
         reply = msg.reply_to_message
         msg = get_message_text(msg)
 
@@ -132,7 +133,9 @@ class BotState:
             if self.RE_COMMAND_NO_ARGS.match(msg):
                 msg = '%s %s' % (msg, reply)
 
-        for expr, repl in aliases.items():
+        for _, expr, repl in self.db.get_chat_aliases(chat):
+            msg = re.sub(expr, repl, msg, flags=re.I)
+        for expr, repl in self.get_chat_settings(chat)['aliases'].items():
             msg = re.sub(expr, repl, msg, flags=re.I)
 
         if reply and self.RE_COMMAND_NO_ARGS.match(msg):

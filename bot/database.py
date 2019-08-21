@@ -59,6 +59,12 @@ class BotDatabase:
         '  `chat_id` REFERENCES `chat`(`id`),'
         '  `user_id` REFERENCES `user`(`id`)'
         ')',
+        'CREATE TABLE IF NOT EXISTS `alias` ('
+        '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
+        '  `chat_id` REFERENCES `chat`(`id`),'
+        '  `regexp` TEXT NOT NULL,'
+        '  `replace` TEXT NOT NULL'
+        ')',
         'CREATE TABLE IF NOT EXISTS `sticker_set` ('
         '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
         '  `name` TEXT NOT NULL,'
@@ -84,6 +90,13 @@ class BotDatabase:
         '  `user_id` REFERENCES `user`(`id`),'
         '  `timestamp` INTEGER NOT NULL DEFAULT 0'
         ')',
+        'CREATE TABLE IF NOT EXISTS `search_log` ('
+        '  `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
+        '  `search_query_id` REFERENCES `search_query`(`id`),'
+        '  `user_id` REFERENCES `user`(`id`),'
+        '  `timestamp` INTEGER NOT NULL DEFAULT 0'
+        ')',
+        'CREATE INDEX IF NOT EXISTS `chat_alias` ON `alias` (`chat_id`)',
         'CREATE INDEX IF NOT EXISTS `chat_user_id` ON `chat_user` (`user_id`)',
         'CREATE INDEX IF NOT EXISTS `chat_message` ON `message` (`chat_id`)',
         'CREATE INDEX IF NOT EXISTS `chat_id` ON `chat_user` (`chat_id`)',
@@ -246,6 +259,41 @@ class BotDatabase:
 
     def set_chat_data(self, chat, **fields):
         self._update_item_data('chat', chat.id, fields)
+
+    def get_chat_aliases(self, chat):
+        self.cursor.execute(
+            'SELECT `id`, `regexp`, `replace` FROM `alias`'
+            ' WHERE `chat_id`=?',
+            (chat.id,)
+        )
+        return self.cursor.fetchall()
+
+    def add_chat_alias(self, chat, regexp, replace):
+        self.cursor.execute(
+            'INSERT INTO `alias`'
+            ' (`chat_id`, `regexp`, `replace`) VALUES (?, ?, ?)',
+            (chat.id, regexp, replace)
+        )
+        return self.cursor.fetchall()
+
+    def edit_chat_alias(self, chat, alias_id, regexp, replace):
+        self.cursor.execute(
+            'UPDATE `alias` SET `regexp`=?, `replace`=?'
+            ' WHERE `id`=? AND `chat_id`=?',
+            (regexp, replace, alias_id, chat.id)
+        )
+
+    def delete_chat_alias(self, chat, alias_id=None):
+        if alias_id is None:
+            self.cursor.execute(
+                'DELETE FROM `alias` WHERE `chat_id`=?',
+                (chat.id,)
+            )
+        else:
+            self.cursor.execute(
+                'DELETE FROM `alias` WHERE `id`=? AND `chat_id`=?',
+                (alias_id, chat.id)
+            )
 
     def get_sticker_sets(self, page, page_size):
         page = max(page - 1, 0)
