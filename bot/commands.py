@@ -92,7 +92,7 @@ class BotCommands:
     )
 
     RE_DICE = re.compile(r'^\s*([0-9d][-+0-9duwtfrF%hml^ov ]*)')
-    RE_ALIAS = re.compile(r'^\s*(\S.*)=\s*(\S.*)$')
+    RE_ALIAS = re.compile(r'^\s*(\S.*)=>\s*(\S.*)$')
 
     def __init__(self, bot):
         self.logger = logging.getLogger('bot.commands')
