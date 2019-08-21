@@ -67,7 +67,7 @@ class Bot:
         dispatcher = self.primary.dispatcher
 
         dispatcher.add_handler(MessageHandler(
-            Filters.text,
+            Filters.text | Filters.command,
             self.on_text,
             edited_updates=True
         ))
@@ -231,12 +231,16 @@ class Bot:
     def on_inline(self, bot, update):
         self.commands.inline_query(bot, update)
 
+    def _on_text(self, bot, update):
+        self.state.on_text(update)
+        self.commands.on_command(bot, update)
+
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)
     def on_text(self, _, update):
         if update.message is None:
             return None
-        return self.state.on_text
+        return self._on_text
 
     @update_handler
     @command(C.REPLY_STICKER, P.IGNORED)

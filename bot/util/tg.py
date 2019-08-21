@@ -347,6 +347,9 @@ def command(type_, permission=Permission.USER):
                 return
             if isinstance(res, Promise):
                 promise = res
+            elif not callable(res):
+                on_resolve(res)
+                return
             else:
                 promise = Promise.wrap(res, update, ptype=PT.MANUAL)
             self.queue.put(promise)

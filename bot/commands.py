@@ -99,10 +99,6 @@ class BotCommands:
         self.stopped = bot.stopped
         dispatcher = bot.primary.dispatcher
         dispatcher.add_handler(MessageHandler(
-            Filters.command,
-            self.on_command
-        ))
-        dispatcher.add_handler(MessageHandler(
             Filters.status_update,
             self.status_update
         ))
@@ -156,16 +152,6 @@ class BotCommands:
         if user_id is None:
             return None
         return '[id{0} {1}](tg://user?id={0})'.format(user_id, phone)
-
-    def _get_chat_settings(self, chat):
-        promise = Promise.wrap(
-            self.state.get_chat_settings,
-            chat,
-            ptype=PT.MANUAL
-        )
-        self.queue.put(promise)
-        promise.wait()
-        return promise.value
 
     def _search(self, update, query, reset=False):
         if update.callback_query:
@@ -309,7 +295,6 @@ class BotCommands:
                 except FileNotFoundError:
                     pass
 
-    @update_handler
     def on_command(self, bot, update):
         msg = update.message
         if not msg:
@@ -322,7 +307,7 @@ class BotCommands:
                 strip_command(get_message_text(msg.reply_to_message))
             ))
 
-        aliases = self._get_chat_settings(msg.chat)['aliases']
+        aliases = self.state.get_chat_settings(msg.chat)['aliases']
         msg = text
         if not msg:
             return
@@ -333,7 +318,8 @@ class BotCommands:
 
         match = self.RE_COMMAND.match(msg)
         if match is None:
-            self.logger.warning('!match command %s', msg)
+            self.logger.debug('!match command %s', msg)
+            return
         handler = 'cmd_' + match.group(1).lower()
 
         try:
@@ -415,43 +401,42 @@ class BotCommands:
                     type_ = 'remove_bot'
             else:
                 type_ = 'remove_user'
-        return partial(self.state.on_status_update, type_)
+        return self.state.on_status_update(type_, update)
 
-    @update_handler
     @command(C.REPLY_TEXT)
-    def cmd_start(self, *_):
-        return self.state.random_text
+    def cmd_start(self, _, update):
+        return self.state.random_text(update)
 
-    @update_handler
     @command(C.REPLY_TEXT, P.ROOT)
     def cmd_q(self, _, update):
         query = get_command_args(update.message, help='usage: /q <query>')
-        return lambda _: self.state.query_db(query)
+        return self.state.query_db(query)
 
-    @update_handler
     @command(C.NONE, P.USER_2)
     def cmd_qr(self, _, update):
         query = get_command_args(update.message, help='usage: /qr <query>')
-        self.state.run_async(self._run_script, update,
-                             'query', [query], timeout=self.state.query_timeout)
+        self.state.run_async(
+            self._run_script, update,
+            'query', [query],
+            timeout=self.state.query_timeout
+        )
 
-    @update_handler
     @command(C.NONE, P.USER_2)
     def cmd_qplot(self, _, update):
         query = get_command_args(update.message, help='usage: /qplot <query>')
-        self.state.run_async(self._run_script, update,
-                             'qplot', ['-o', '{{TMP}}', query],
-                             return_image=True,
-                             timeout=self.state.query_timeout)
+        self.state.run_async(
+            self._run_script, update,
+            'qplot', ['-o', '{{TMP}}', query],
+            return_image=True,
+            timeout=self.state.query_timeout
+        )
 
-    @update_handler
     @command(C.NONE)
     def cmd_pic(self, _, update):
         query = get_command_args(update.message, help='usage: /pic <query>')
         query = remove_control_chars(query).replace('\n', ' ')
         self.state.run_async(self._search, update, query)
 
-    @update_handler
     @command(C.NONE)
     def cb_pic(self, _, update):
         if not update.callback_query.message:
@@ -459,7 +444,6 @@ class BotCommands:
         query = remove_control_chars(update.callback_query.message.caption)
         self.state.run_async(self._search, update, query)
 
-    @update_handler
     @command(C.NONE)
     def cb_picreset(self, _, update):
         if not update.callback_query.message:
@@ -467,27 +451,22 @@ class BotCommands:
         query = remove_control_chars(update.callback_query.message.caption)
         self.state.run_async(self._search, update, query, True)
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
-    def cmd_piclog(self, *_):
-        return self.state.list_search_requests
+    def cmd_piclog(self, _, update):
+        return self.state.list_search_requests(update)
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
     def cb_pic_log(self, *_):
         return self.state.list_search_requests
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
-    def cmd_picstats(self, *_):
-        return self.state.get_search_stats
+    def cmd_picstats(self, _, update):
+        return self.state.get_search_stats(update)
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
     def cb_pic_stats(self, *_):
         return self.state.get_search_stats
 
-    @update_handler
     @command(C.REPLY_TEXT)
     def cmd_image(self, _, update):
         msg = update.message
@@ -500,9 +479,8 @@ class BotCommands:
             return
         deferred = Promise.defer()
         self.state.bot.download_file(msg, self.state.file_dir, deferred)
-        return partial(self.state.on_photo, deferred)
+        return self.state.on_photo(deferred, update)
 
-    @update_handler
     @command(C.NONE)
     def cmd_ocr(self, _, update):
         msg = update.message
@@ -525,37 +503,28 @@ class BotCommands:
         self.state.run_async(self._run_script, update,
                              'ocr', [args], deferred.promise, 'no text found')
 
-    @update_handler
     @command(C.REPLY_STICKER)
     def cmd_sticker(self, *_):
-        return lambda *_: (self.state.db.random_sticker(), True)
+        return self.state.db.random_sticker(), True
 
-    @update_handler
-    @command(C.NONE)
-    def cmd_help(self, _, update):
-        update.message.reply_text(self.HELP)
+    @command(C.REPLY_TEXT)
+    def cmd_help(self, *_):
+        return self.HELP
 
-    @update_handler
-    @command(C.NONE)
-    def cmd_helptags(self, _, update):
-        update.message.reply_text(
-            self.formatter_tags,
-            parse_mode=ParseMode.HTML
-        )
+    @command(C.REPLY_TEXT)
+    def cmd_helptags(self, *_):
+        return self.formatter_tags, True, ParseMode.HTML
 
-    @update_handler
-    @command(C.NONE)
-    def cmd_helpemotes(self, _, update):
-        update.message.reply_text(self.formatter_emotes)
+    @command(C.REPLY_TEXT)
+    def cmd_helpemotes(self, *_):
+        return self.formatter_emotes
 
-    @update_handler
     @command(C.NONE)
     def cmd_echo(self, bot, update):
         msg = get_command_args(update.message, help='usage: /echo <text>')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
 
-    @update_handler
-    @command(C.NONE)
+    @command(C.REPLY_TEXT)
     def cmd_roll(self, _, update):
         help_ = ('usage:\n'
                  '/roll <dice> [message]\n'
@@ -563,53 +532,45 @@ class BotCommands:
         msg = get_command_args(update.message, help=help_)
         match = self.RE_DICE.match(msg)
         if match is None:
-            settings = self._get_chat_settings(update.message.chat)
+            settings = self.state.get_chat_settings(update.message.chat)
             separator = settings['roll_separator']
-            strings = [ s for s in re.split(separator, msg, re.I) if s]
+            strings = [s for s in re.split(separator, msg, re.I) if s]
             if len(strings) < 2:
-                update.message.reply_text(help_, quote=True)
-            else:
-                update.message.reply_text(random.choice(strings), quote=True)
-        else:
-            msg = match.group(1).strip()
-            roll = int(dice.roll(msg))
-            update.message.reply_text(
-                '<i>%s</i> → <b>%s</b>' % (msg, roll),
-                quote=True,
-                parse_mode=ParseMode.HTML
-            )
+                return help_, True
+            return random.choice(strings), True
+        msg = match.group(1).strip()
+        roll = int(dice.roll(msg))
+        return (
+            '<i>%s</i> → <b>%s</b>' % (msg, roll),
+            True, ParseMode.HTML
+        )
 
-    @update_handler
-    @command(C.NONE)
+    @command(C.REPLY_TEXT)
     def cmd_format(self, _, update):
         msg = get_command_args(update.message, help='usage: /format <text>')
         msg = self.state.formatter.format(msg)
-        update.message.reply_text(msg, parse_mode=ParseMode.HTML)
+        return msg, True, ParseMode.HTML
 
-    @update_handler
-    @command(C.NONE)
+    @command(C.REPLY_TEXT)
     def cmd_eval(self, _, update):
         msg = get_command_args(update.message, help='usage: /eval <expression>')
         msg = safe_eval(msg)
         msg = re.sub(r'\.?0+$', '', '%.04f' % msg)
-        update.message.reply_text(msg, quote=True)
+        return msg, quote=True
 
-    @update_handler
-    @command(C.NONE)
+    @command(C.REPLY_TEXT)
     def cmd_b64(self, _, update):
         msg = get_command_args(update.message, help='usage: /b64 <text>')
         msg = b64encode(msg.encode('utf-8')).decode('ascii')
-        update.message.reply_text(msg, quote=True)
+        return msg, True
 
-    @update_handler
     @command(C.NONE)
     def cmd_b64d(self, bot, update):
         msg = get_command_args(update.message, help='usage: /b64d <base64>')
         msg = b64decode(msg.encode('utf-8'), validate=True).decode('utf-8')
         bot.send_message(chat_id=update.message.chat_id, text=msg)
 
-    @update_handler
-    @command(C.NONE, P.ADMIN)
+    @command(C.REPLY_TEXT, P.ADMIN)
     def cmd_getuser(self, _, update):
         msg = update.message
         num = get_command_args(update.message, help='usage: /getuser <number>')
@@ -619,19 +580,16 @@ class BotCommands:
         res = self._get_user_link(msg, num)
         if res is None:
             res = 'not found: ' + num
-        msg.reply_text(res, parse_mode=ParseMode.MARKDOWN)
+        return res, True, ParseMode.MARKDOWN
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
     def cmd_getusers(self, _, update):
-        return self.state.list_users
+        return self.state.list_users(update)
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
     def cb_users(self, _, update):
         return self.state.list_users
 
-    @update_handler
     @command(C.NONE, P.ADMIN)
     def cmd_stickerset(self, _, update):
         msg = update.message
@@ -653,69 +611,58 @@ class BotCommands:
         else:
             self.state.run_async(reply_sticker_set, update, stickers)
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
-    def cmd_getstickers(self, *_):
-        return self.state.list_sticker_sets
+    def cmd_getstickers(self, _, update):
+        return self.state.list_sticker_sets(update)
 
-    @update_handler
     @command(C.REPLY_TEXT_PAGINATED)
     def cb_sticker_sets(self, *_):
         return self.state.list_sticker_sets
 
-    @update_handler
     @command(C.REPLY_TEXT)
-    def cmd_settings(self, *_):
-        return self.state.show_settings
+    def cmd_settings(self, _, update):
+        return self.state.show_settings(update)
 
-    @update_handler
     @command(C.GET_OPTIONS)
-    def cmd_setcontext(self, *_):
-        return self.state.list_contexts
+    def cmd_setcontext(self, _, update):
+        return self.state.list_contexts(update)
 
     @command(C.SET_OPTION)
     def cb_context(self, *_):
         return self.state.set_context
 
-    @update_handler
     @command(C.GET_OPTIONS)
-    def cmd_delprivate(self, *_):
-        return self.state.confirm_delete_private_context
+    def cmd_delprivate(self, _, update):
+        return self.state.confirm_delete_private_context(update)
 
-    @update_handler
     @command(C.SET_OPTION)
     def cb_delete_private_context(self, *_):
         return self.state.delete_private_context
 
-    @update_handler
     @command(C.GET_OPTIONS)
-    def cmd_setorder(self, *_):
-        return self.state.list_orders
+    def cmd_setorder(self, _, update):
+        return self.state.list_orders(update)
 
     @command(C.SET_OPTION)
     def cb_order(self, *_):
         return self.state.set_order
 
-    @update_handler
     @command(C.GET_OPTIONS)
-    def cmd_setlearn(self, *_):
-        return self.state.list_learn_modes
+    def cmd_setlearn(self, _, update):
+        return self.state.list_learn_modes(update)
 
     @command(C.SET_OPTION)
     def cb_learn_mode(self, *_):
         return self.state.set_learn_mode
 
-    @update_handler
     @command(C.REPLY_TEXT)
-    def cmd_settrigger(self, *_):
-        return self.state.set_trigger
+    def cmd_settrigger(self, _, update):
+        return self.state.set_trigger(update)
 
-    @update_handler
     @command(C.REPLY_TEXT)
     def cmd_setreplylength(self, *_):
         return self.state.set_reply_length
 
-    @update_handler
     @command(C.REPLY_TEXT)
-    def cmd_unsettrigger(self, *_):
-        return self.state.remove_trigger
+    def cmd_unsettrigger(self, _, update):
+        return self.state.remove_trigger(update)
