@@ -556,7 +556,7 @@ class BotCommands:
         msg = get_command_args(update.message, help='usage: /eval <expression>')
         msg = safe_eval(msg)
         msg = re.sub(r'\.?0+$', '', '%.04f' % msg)
-        return msg, quote=True
+        return msg, True
 
     @command(C.REPLY_TEXT)
     def cmd_b64(self, _, update):
