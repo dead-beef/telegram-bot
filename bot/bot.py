@@ -232,8 +232,10 @@ class Bot:
         self.commands.inline_query(bot, update)
 
     def _on_text(self, bot, update):
-        self.state.on_text(update)
-        self.commands.on_command(bot, update)
+        self.state.apply_aliases(update)
+        if update.message.text[0] == '/':
+            return self.commands.on_command(bot, update)
+        return self.state.on_text(update)
 
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)

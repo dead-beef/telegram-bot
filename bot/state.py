@@ -32,6 +32,8 @@ class BotState:
     ASYNC_MAX_DEFAULT = 4
     PROCESS_TIMEOUT_DEFAULT = 60
     QUERY_TIMEOUT_DEFAULT = 5
+    RE_COMMAND = re.compile(r'^/([^@\s]+)')
+    RE_COMMAND_NO_ARGS = re.compile(r'^/([^@\s]+)(@\S+)?\s*$')
 
     def __init__(self,
                  bot, id_, username,
@@ -116,6 +118,34 @@ class BotState:
             with self.async_lock:
                 self.async_running -= 1
             raise
+
+    def apply_aliases(self, update):
+        msg = update.message
+        if not msg:
+            return
+
+        text = get_message_text(msg)
+        if msg.reply_to_message and self.RE_COMMAND_NO_ARGS.match(text):
+            text = ' '.join((
+                text,
+                strip_command(get_message_text(msg.reply_to_message))
+            ))
+
+        aliases = self.get_chat_settings(msg.chat)['aliases']
+        msg = text
+        if not msg:
+            return
+
+        for expr, repl in aliases.items():
+            msg = re.sub(expr, repl, msg, flags=re.I)
+
+        if msg.reply_to_message and self.RE_COMMAND_NO_ARGS.match(text):
+            text = ' '.join((
+                text,
+                strip_command(get_message_text(msg.reply_to_message))
+            ))
+
+        update.message.text = msg
 
     def get_chat_context(self, chat):
         context = self.db.get_chat_data(chat, 'context')

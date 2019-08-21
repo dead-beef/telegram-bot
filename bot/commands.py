@@ -86,8 +86,6 @@ class BotCommands:
         '/qplot <query> - sql query plot (read only)\n'
     )
 
-    RE_COMMAND = re.compile(r'^/([^@\s]+)')
-    RE_COMMAND_NO_ARGS = re.compile(r'^/([^@\s]+)(@\S+)?\s*$')
     RE_DICE = re.compile(r'^\s*([0-9d][-+0-9duwtfrF%hml^ov ]*)')
 
     def __init__(self, bot):
@@ -296,27 +294,8 @@ class BotCommands:
                     pass
 
     def on_command(self, bot, update):
-        msg = update.message
-        if not msg:
-            return
-
-        text = get_message_text(msg)
-        if msg.reply_to_message and self.RE_COMMAND_NO_ARGS.match(text):
-            text = ' '.join((
-                text,
-                strip_command(get_message_text(msg.reply_to_message))
-            ))
-
-        aliases = self.state.get_chat_settings(msg.chat)['aliases']
-        msg = text
-        if not msg:
-            return
-
-        for expr, repl in aliases.items():
-            msg = re.sub(expr, repl, msg, flags=re.I)
-        update.message.text = msg
-
-        match = self.RE_COMMAND.match(msg)
+        msg = update.message.text
+        match = self.state.RE_COMMAND.match(msg)
         if match is None:
             self.logger.debug('!match command %s', msg)
             return
