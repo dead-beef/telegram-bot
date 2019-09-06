@@ -386,7 +386,7 @@ class BotCommands:
                     type_ = 'remove_bot'
             else:
                 type_ = 'remove_user'
-        return self.state.on_status_update(type_, update)
+        return partial(self.state.on_status_update, type_)
 
     @command(C.REPLY_TEXT)
     def cmd_start(self, _, update):
