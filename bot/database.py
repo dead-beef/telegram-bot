@@ -3,13 +3,9 @@ import time
 import math
 import logging
 
-try:
-    import pysqlite3 as sqlite3
-except ImportError:
-    import sqlite3
-
 from .error import CommandError
 from .util import get_file, get_message_filename, Permission as P
+from .util.deps import sqlite3
 
 
 class BotDatabase:

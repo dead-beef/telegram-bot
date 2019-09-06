@@ -16,6 +16,7 @@ from telegram import (
 from bot.error import BotError, CommandError
 from bot.promise import Promise, PromiseType as PT
 
+from .deps import sqlite3
 from .enums import Permission, CommandType
 from .string import match_command_user, strip_command
 from .misc import chunks
@@ -274,7 +275,7 @@ def check_permission(bot, user, min_value=Permission.USER):
     get_permission = lambda: bot.state.db.get_user_data(user, 'permission')
     try:
         value = get_permission()
-    except Exception:
+    except sqlite3.ProgrammingError:
         get_permission = Promise.wrap(get_permission, ptype=PT.MANUAL)
         bot.queue.put(get_permission)
         get_permission.wait()

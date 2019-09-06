@@ -55,7 +55,7 @@ class BotCommands:
         '/helpemotes - list formatter emotes\n'
         '\n'
         '/alias - list aliases\n'
-        '/aadd <regexp>=<string> - add alias\n'
+        '/aadd <regexp> => <string> - add alias\n'
         '/adel <id> - delete alias\n'
         '/aclear - delete all aliases\n'
         '\n'
