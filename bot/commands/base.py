@@ -157,10 +157,13 @@ class BotCommandBase:
                     quote=True
                 )
         else:
-            handler(bot, update)
+            try:
+                handler(bot, update)
+            except Exception as ex:
+                self.logger.error(ex)
 
     @update_handler
-    def callback_query(self, bot, update):
+    def _callback_query(self, bot, update):
         msg = update.callback_query.message
         cmd = None
         has_cmd = False
@@ -193,6 +196,13 @@ class BotCommandBase:
                 return
 
         msg.edit_text(text='unknown command "%s"' % cmd)
+
+    @update_handler
+    @command(C.REPLY_TEXT)
+    def callback_query(self, bot, update):
+        if update.callback_query is None:
+            return None
+        return partial(self._callback_query, bot)
 
     @update_handler
     def inline_query(self, _, update):

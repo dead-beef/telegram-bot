@@ -32,6 +32,16 @@ RE_ANIMATION_URL = re.compile(r'^[^?&]*\.gif([?&].*)?$', re.I)
 FILE_TYPES = ['video', 'audio', 'document', 'voice', 'photo']
 
 
+def check_callback_user(update):
+    if not update.callback_query.message:
+        return None
+    if not update.callback_query.message.reply_to_message:
+        return None
+    user = update.callback_query.message.reply_to_message.from_user
+    if update.callback_query.from_user.id != user.id:
+        return None
+    return user
+
 def get_chat_title(chat):
     if chat.title is not None:
         return chat.title
@@ -266,7 +276,7 @@ def update_handler(method):
         try:
             method(self, bot, update)
         except Exception as ex:
-            self.logger.error(ex)
+            self.logger.exception('update error')
             raise
     return ret
 

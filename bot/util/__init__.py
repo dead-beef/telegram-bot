@@ -7,6 +7,7 @@ from .string import (
     match_command_user, sanitize_log
 )
 from .tg import (
+    check_callback_user,
     get_chat_title, get_user_name, get_message_filename,
     get_message_text, get_command_args, get_file, download_file,
     reply_text, reply_text_paginated, reply_sticker, reply_sticker_set,
