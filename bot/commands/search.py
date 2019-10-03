@@ -1,3 +1,5 @@
+import re
+
 from telegram import (
     ChatAction,
     TelegramError,
@@ -18,11 +20,14 @@ from bot.util import (
 
 
 class SearchCommandMixin:
+    RE_VIDEO_LINK = re.compile(r'^https?://(www\.)?youtube\.com\/')
+
     def __init__(self, bot):
         super().__init__(bot)
         self.help = self.help + (
             '\n'
             '/pic <query> - image search\n'
+            '/vid <query> - video search\n'
             '/piclog - show image search log\n'
             '/picstats - show image search stats\n'
         )
@@ -103,6 +108,15 @@ class SearchCommandMixin:
                     InlineKeyboardButton('next', callback_data='pic')
                 )
             keyboard = InlineKeyboardMarkup([keyboard])
+
+            if self.RE_VIDEO_LINK.match(res.url):
+                bot.send_message(
+                    chat_id,
+                    '%s\n%s\n\n%s' % (res.title, res.url, query),
+                    reply_markup=keyboard
+                )
+                return
+
             for url in (res.image, res.thumbnail, None):
                 try:
                     self.logger.info('%r %r', query, url)
@@ -127,6 +141,13 @@ class SearchCommandMixin:
     def cmd_pic(self, _, update):
         query = get_command_args(update.message, help='usage: /pic <query>')
         query = remove_control_chars(query).replace('\n', ' ')
+        self.state.run_async(self._search, update, query)
+
+    @command(C.NONE)
+    def cmd_vid(self, _, update):
+        query = get_command_args(update.message, help='usage: /vid <query>')
+        query = remove_control_chars(query).replace('\n', ' ')
+        query += ' site:youtube.com'
         self.state.run_async(self._search, update, query)
 
     @command(C.NONE)
