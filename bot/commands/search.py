@@ -154,14 +154,22 @@ class SearchCommandMixin:
     def cb_pic(self, _, update):
         if not update.callback_query.message:
             self.logger.info('cb_pic no message')
-        query = remove_control_chars(update.callback_query.message.caption)
+        if update.callback_query.message.caption:
+            query = update.callback_query.message.caption
+        else:
+            query = update.callback_query.message.text.split('\n\n')[-1]
+        query = remove_control_chars(query)
         self.state.run_async(self._search, update, query)
 
     @command(C.NONE)
     def cb_picreset(self, _, update):
         if not update.callback_query.message:
             self.logger.info('cb_picreset no message')
-        query = remove_control_chars(update.callback_query.message.caption)
+        if update.callback_query.message.caption:
+            query = update.callback_query.message.caption
+        else:
+            query = update.callback_query.message.text.split('\n\n')[-1]
+        query = remove_control_chars(query)
         self.state.run_async(self._search, update, query, True)
 
     @command(C.REPLY_TEXT_PAGINATED)
