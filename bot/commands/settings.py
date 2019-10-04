@@ -76,40 +76,40 @@ class SettingsCommandMixin:
         return self.state.list_contexts(update)
 
     @command(C.SET_OPTION)
-    def cb_context(self, *_):
-        return self.state.set_context
+    def cb_context(self, _, update):
+        return self.state.set_context(update)
 
     @command(C.GET_OPTIONS)
     def cmd_delprivate(self, _, update):
         return self.state.confirm_delete_private_context(update)
 
     @command(C.SET_OPTION)
-    def cb_delete_private_context(self, *_):
-        return self.state.delete_private_context
+    def cb_delete_private_context(self, _, update):
+        return self.state.delete_private_context(update)
 
     @command(C.GET_OPTIONS)
     def cmd_setorder(self, _, update):
         return self.state.list_orders(update)
 
     @command(C.SET_OPTION)
-    def cb_order(self, *_):
-        return self.state.set_order
+    def cb_order(self, _, update):
+        return self.state.set_order(update)
 
     @command(C.GET_OPTIONS)
     def cmd_setlearn(self, _, update):
         return self.state.list_learn_modes(update)
 
     @command(C.SET_OPTION)
-    def cb_learn_mode(self, *_):
-        return self.state.set_learn_mode
+    def cb_learn_mode(self, _, update):
+        return self.state.set_learn_mode(update)
 
     @command(C.REPLY_TEXT)
     def cmd_settrigger(self, _, update):
         return self.state.set_trigger(update)
 
     @command(C.REPLY_TEXT)
-    def cmd_setreplylength(self, *_):
-        return self.state.set_reply_length
+    def cmd_setreplylength(self, _, update):
+        return self.state.set_reply_length(update)
 
     @command(C.REPLY_TEXT)
     def cmd_unsettrigger(self, _, update):

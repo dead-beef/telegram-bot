@@ -75,7 +75,7 @@ class DataCommandMixin:
 
     @command(C.REPLY_TEXT_PAGINATED)
     def cb_users(self, _, update):
-        return self.state.list_users
+        return self.state.list_users(update)
 
     @command(C.NONE, P.ADMIN)
     def cmd_stickerset(self, _, update):
@@ -103,5 +103,5 @@ class DataCommandMixin:
         return self.state.list_sticker_sets(update)
 
     @command(C.REPLY_TEXT_PAGINATED)
-    def cb_sticker_sets(self, *_):
-        return self.state.list_sticker_sets
+    def cb_sticker_sets(self, _, update):
+        return self.state.list_sticker_sets(update)
