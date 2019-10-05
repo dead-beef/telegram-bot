@@ -136,7 +136,13 @@ class BotDatabase:
         '  `sp_atk` INTEGER NOT NULL DEFAULT 10,'
         '  `def` INTEGER NOT NULL DEFAULT 10,'
         '  `sp_def` INTEGER NOT NULL DEFAULT 10,'
-        '  `speed` INTEGER NOT NULL DEFAULT 10'
+        '  `speed` INTEGER NOT NULL DEFAULT 10,'
+        '  `capture_rate` INTEGER NOT NULL DEFAULT 100,'
+        '  `habitat_id` REFERENCES `habitat`(`id`)'
+        ')',
+        'CREATE TABLE IF NOT EXISTS `habitat` ('
+        '  `id` INTEGER NOT NULL PRIMARY KEY,'
+        '  `name` TEXT NOT NULL'
         ')',
         'CREATE TABLE IF NOT EXISTS `pokemon_evolution` ('
         '  `from` REFERENCES `pokemon`(`id`),'
@@ -191,7 +197,8 @@ class BotDatabase:
         '  `user_pokemon_id` REFERENCES `user_pokemon`(`id`)'
         '                    ON DELETE CASCADE,'
         '  `move_id` REFERENCES `move`(`id`),'
-        '  `pp` INTEGER NOT NULL DEFAULT 10'
+        '  `pp` INTEGER NOT NULL DEFAULT 10,'
+        '  `max_pp` INTEGER NOT NULL DEFAULT 10'
         ')',
 
         'CREATE TABLE IF NOT EXISTS `item` ('
@@ -219,6 +226,12 @@ class BotDatabase:
         '  `user_2_pokemon_id` REFERENCES `user_2_pokemon`(`id`),'
         '  UNIQUE (`user_id`),'
         '  UNIQUE (`user_2_id`)'
+        ')',
+        'CREATE TABLE IF NOT EXISTS `pokemon_battle_result` ('
+        '  `user_id` REFERENCES `user`(`id`),'
+        '  `user_2_id` REFERENCES `user`(`id`),'
+        '  `result` INTEGER NOT NULL,'
+        '  `timestamp` INTEGER NOT NULL'
         ')',
 
         'CREATE INDEX IF NOT EXISTS `chat_alias` ON `alias` (`chat_id`)',

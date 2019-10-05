@@ -1,5 +1,5 @@
 import logging
-from random import randint, shuffle
+from random import randint, shuffle, choice
 
 
 class GameState:
@@ -8,7 +8,7 @@ class GameState:
     def __init__(self, db):
         self.db = db
         self.max_user_pokemon = 6
-        self.max_pokemon_moves = 6
+        self.max_pokemon_moves = 4
 
     def get_user_items(self, user):
         self.db.cursor.execute(
@@ -21,6 +21,10 @@ class GameState:
             ' WHERE `user_inventory`.`user_id` = ?',
             (user.id,)
         )
+        return self.db.cursor.fetchall()
+
+    def get_habitats(self):
+        self.db.cursor.execute('SELECT `id`, `name` FROM `habitat`')
         return self.db.cursor.fetchall()
 
     def add_user_item(self, user, item_id, count):
@@ -60,7 +64,7 @@ class GameState:
             )
 
     def add_user_items_default(self, user):
-        default_items = [(4, 10), (24, 5), (29, 10), (39, 5)]
+        default_items = [(4, 10), (24, 1), (29, 1), (39, 1)]
         ret = []
         for item_id, max_count in default_items:
             self.db.cursor.execute(
@@ -165,10 +169,15 @@ class GameState:
         if not self.is_move_available(id_, move_id):
             raise ValueError('move is not available')
         self.db.cursor.execute(
+            'SELECT `pp` FROM `move` WHERE `id`=?',
+            (move_id,)
+        )
+        pp = self.db.cursor.fetchone()[0]
+        self.db.cursor.execute(
             'INSERT OR REPLACE INTO `user_pokemon_move`'
-            ' (`user_pokemon_id`, `move_id`, `pp`)'
-            ' VALUES(?, ?, ?)',
-            (id_, move_id, 0)
+            ' (`user_pokemon_id`, `move_id`, `pp`, `max_pp`)'
+            ' VALUES(?, ?, ?, ?)',
+            (id_, move_id, 0, pp)
         )
         self.db.save()
 
@@ -201,9 +210,9 @@ class GameState:
             pp = move[1]
             self.db.cursor.execute(
                 'INSERT INTO `user_pokemon_move`'
-                ' (`user_pokemon_id`, `move_id`, `pp`)'
-                ' VALUES(?, ?, ?)',
-                (id_, move_id, pp)
+                ' (`user_pokemon_id`, `move_id`, `pp`, `max_pp`)'
+                ' VALUES(?, ?, ?, ?)',
+                (id_, move_id, pp, pp)
             )
             ret.append(move_id)
         self.db.save()
@@ -257,11 +266,35 @@ class GameState:
         self.db.save()
         return True
 
+    def heal(self, user):
+        self.db.cursor.execute(
+            'SELECT `id` FROM `user_pokemon` WHERE `user_id`=?',
+            (user.id,)
+        )
+        ids = [row[0] for row in self.db.cursor.fetchall()]
+        row_count = 0
+        params = ','.join('?' for _ in ids)
+        self.db.cursor.execute(
+            'UPDATE `user_pokemon` SET `hp`=`max_hp` WHERE `id` IN (%s)'
+            % params,
+            ids
+        )
+        row_count = self.db.cursor.rowcount
+        self.db.cursor.execute(
+            'UPDATE `user_pokemon_move` SET `pp`=`max_pp`'
+            ' WHERE `user_pokemon_id` IN (%s)' % params,
+            ids
+        )
+        row_count += self.db.cursor.rowcount
+        self.db.save()
+        return '%d rows affected' % row_count
+
     @staticmethod
     def randomize(stat):
         return stat * randint(75, 125) // 100
 
-    def create_pokemon(self, id_, user_id, min_level, max_level):
+    def create_pokemon(self, id_, user_id,
+                       min_level, max_level, evolve=False):
         if user_id is not None:
             self.db.cursor.execute(
                 'SELECT COUNT(*) FROM `user_pokemon` WHERE `user_id`=?',
@@ -272,6 +305,20 @@ class GameState:
                 raise ValueError('inventory is full')
 
         level = randint(min_level, max_level)
+
+        if evolve:
+            while True:
+                self.db.cursor.execute(
+                    'SELECT `to` FROM `pokemon_evolution`'
+                    ' WHERE `from`=? AND `min_level`>0'
+                    ' AND `min_level`<=?',
+                    (id_, level)
+                )
+                rows = self.db.cursor.fetchall()
+                if not rows:
+                    break
+                id_ = choice(rows)[0]
+
         self.db.cursor.execute(
             'SELECT `p`.`height`, `p`.`weight`, `p`.`hp`, `p`.`atk`,'
             '  `p`.`sp_atk`, `p`.`def`, `p`.`sp_def`,'
@@ -306,8 +353,26 @@ class GameState:
         )
         ret = self.db.cursor.lastrowid
         self.add_pokemon_exp(ret, exp)
-        self.add_random_moves(ret, 2)
+        self.add_random_moves(ret, self.max_pokemon_moves)
         self.db.save()
+        return ret
+
+    def create_random_encounter(self, user_id,
+                                habitat_id, min_level, max_level):
+        self.db.cursor.execute(
+            'SELECT `id` FROM `pokemon`'
+            ' WHERE `habitat_id`=? ORDER BY RANDOM() LIMIT 1',
+            (habitat_id,)
+        )
+        pid = self.db.cursor.fetchone()
+        if pid is None:
+            return 'no pokemon in habitat'
+            #return None
+        pid = pid[0]
+        id_ = self.create_pokemon(pid, None, min_level, max_level, True)
+
+        ret = self.pokemon_info(id_)
+        self.remove_unused_pokemon()
         return ret
 
     def pokemon_info_short(self, id_):
@@ -400,12 +465,13 @@ class GameState:
 
     def remove_unused_pokemon(self):
         self.db.cursor.execute(
-            'DELETE `up`'
-            ' FROM `user_pokemon` `up`'
-            '  LEFT JOIN `pokemon_battle` `b`'
-            '   ON `b`.`user_pokemon_id`=`up`.`id`'
-            '      OR `b`.`user_2_pokemon_id`=`up`.`id`'
-            ' WHERE `up`.`user_id` IS NULL AND `b`.`id` IS NULL'
+            'DELETE FROM `user_pokemon` WHERE `id` IN ('
+            '  SELECT `up`.`id` FROM `user_pokemon` `up`'
+            '    LEFT JOIN `pokemon_battle` `b`'
+            '     ON `b`.`user_pokemon_id`=`up`.`id`'
+            '        OR `b`.`user_2_pokemon_id`=`up`.`id`'
+            '    WHERE `up`.`user_id` IS NULL AND `b`.`id` IS NULL'
+            ')'
         )
         self.db.save()
         return self.db.cursor.rowcount

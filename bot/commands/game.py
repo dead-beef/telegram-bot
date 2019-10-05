@@ -26,6 +26,7 @@ class GameCommandMixin:
             '/getitems - get items\n'
             '/inv - view inventory\n'
             '/mon - view pokemon\n'
+            '/heal - heal pokemon\n'
             '/encounter - start a random encounter\n'
             '/flee - flee from all battles\n'
             '/give <item> <count> - give item\n'
@@ -95,6 +96,14 @@ class GameCommandMixin:
             return
         res = self.game.add_user_items_default(user)
         res = '\n'.join('%s %s +%d' % item for item in res)
+        return res, True
+
+    @command(C.REPLY_TEXT)
+    def cmd_heal(self, _, update):
+        user = update.message.from_user
+        if self.game.is_in_battle(user.id):
+            return 'user is in a battle', True
+        res = self.game.heal(user)
         return res, True
 
     @command(C.NONE)
@@ -261,10 +270,68 @@ class GameCommandMixin:
         res = self.game.flee(user.id)
         return 'fled from %s battles' % res, True
 
-    #@command(C.NONE)
-    #def cmd_encounter(self, _, update):
-    #    user = update.message.from_user
-    #    if self.game.is_in_battle(user.id):
-    #        update.message.reply_text('user is in a battle', quote=True)
-    #        return
-    #    id_ = self.game.create_random_encounter(user.id)
+    @command(C.NONE)
+    def cmd_encounter(self, _, update):
+        user = update.message.from_user
+        if self.game.is_in_battle(user.id):
+            update.message.reply_text('user is in a battle', quote=True)
+            return
+
+        keyboard = [
+            InlineKeyboardButton(
+                name,
+                callback_data='elevel %d' % id_
+            )
+            for id_, name in self.game.get_habitats()
+        ]
+        keyboard = list(chunks(keyboard, 3))
+        keyboard = InlineKeyboardMarkup(keyboard)
+
+        update.message.reply_text(
+            'habitat:',
+            reply_markup=keyboard,
+            quote=True
+        )
+
+    @command(C.NONE)
+    def cb_elevel(self, _, update):
+        user = check_callback_user(update)
+        if user is None or self.game.is_in_battle(user.id):
+            return
+
+        hid = int(update.callback_query.data)
+
+        keyboard = [
+            InlineKeyboardButton(
+                '%d-%d' % ((level - 1) * 10 + 1, level * 10),
+                callback_data='estart %d %d' % (hid, level * 10)
+            )
+            for level in range(1, 11)
+        ]
+        keyboard = list(chunks(keyboard, 4))
+        keyboard = InlineKeyboardMarkup(keyboard)
+
+        update.callback_query.message.edit_text(
+            'level:',
+            reply_markup=keyboard
+        )
+
+    @command(C.NONE)
+    def cb_estart(self, _, update):
+        user = check_callback_user(update)
+        if user is None or self.game.is_in_battle(user.id):
+            return
+
+        args = update.callback_query.data.split()
+        hid = int(args[0])
+        max_level = int(args[1])
+        min_level = max_level - 9
+
+        res = self.game.create_random_encounter(
+            user.id, hid, min_level, max_level
+        )
+
+        update.callback_query.message.edit_text(
+            res,
+            parse_mode=ParseMode.MARKDOWN
+        )
