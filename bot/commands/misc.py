@@ -40,6 +40,7 @@ class MiscCommandMixin:
             '/image - generate image\n'
             '/ocr [language[+language...]] - ocr\n'
             '/sticker - send random sticker\n'
+            '/makesticker - create sticker from image'
         )
 
     @command(C.REPLY_TEXT)
@@ -81,6 +82,30 @@ class MiscCommandMixin:
         self.state.bot.download_file(msg, self.state.file_dir, deferred)
         self.state.run_async(self._run_script, update,
                              'ocr', [args], deferred.promise, 'no text found')
+
+    @command(C.NONE)
+    def cmd_makesticker(self, _, update):
+        msg = update.message
+        if msg.photo or msg.document:
+            pass
+        elif msg.reply_to_message and (
+                msg.reply_to_message.photo
+                or msg.reply_to_message.document
+        ):
+            msg = msg.reply_to_message
+        else:
+            update.message.reply_text('no input image')
+            return
+
+        deferred = Promise.defer()
+        self.state.bot.download_file(msg, self.state.file_dir, deferred)
+        self.state.run_async(
+            self._run_script, update,
+            'make_sticker', ['{{TMP}}'],
+            deferred.promise,
+            return_file='png',
+            timeout=self.state.query_timeout
+        )
 
     @command(C.REPLY_STICKER)
     def cmd_sticker(self, *_):

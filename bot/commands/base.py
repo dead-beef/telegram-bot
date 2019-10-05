@@ -25,6 +25,7 @@ from bot.util import (
     command,
     update_handler,
     reply_photo,
+    reply_file,
     CommandType as C
 )
 
@@ -96,7 +97,7 @@ class BotCommandBase:
 
     def _run_script(self, update, name, args,
                     download=None, no_output='<no output>',
-                    return_image=False, timeout=None):
+                    return_image=False, return_file=None, timeout=None):
         try:
             update.message.bot.send_chat_action(
                 update.effective_chat.id,
@@ -107,11 +108,13 @@ class BotCommandBase:
             pass
         try:
             tmp = None
+            ext = 'jpg' if return_image else return_file
 
-            if return_image:
-                tmp = os.path.join(self.state.tmp_dir, '%s_%s_plot.jpg' % (
+            if ext is not None:
+                tmp = os.path.join(self.state.tmp_dir, '%s_%s.%s' % (
                     update.effective_chat.id,
-                    update.message.message_id
+                    update.message.message_id,
+                    ext
                 ))
                 args = [tmp if arg == '{{TMP}}' else arg for arg in args]
 
@@ -127,8 +130,11 @@ class BotCommandBase:
                 timeout=timeout or self.state.process_timeout
             ).decode('utf-8').strip() or no_output
 
-            if return_image and os.path.exists(tmp):
-                reply_photo(update, tmp, quote=True)
+            if tmp is not None and os.path.exists(tmp):
+                if return_image:
+                    reply_photo(update, tmp, quote=True)
+                else:
+                    reply_file(update, tmp, quote=True)
             else:
                 update.message.reply_text(trunc(output), quote=True)
         except Exception as ex:

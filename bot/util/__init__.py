@@ -11,6 +11,6 @@ from .tg import (
     get_chat_title, get_user_name, get_message_filename,
     get_message_text, get_command_args, get_file, download_file,
     reply_text, reply_text_paginated, reply_sticker, reply_sticker_set,
-    reply_photo, reply_keyboard, reply_callback_query, send_image,
-    update_handler, check_permission, command, FILE_TYPES
+    reply_photo, reply_file, reply_keyboard, reply_callback_query,
+    send_image, update_handler, check_permission, command, FILE_TYPES
 )

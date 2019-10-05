@@ -221,6 +221,12 @@ def reply_photo(update, img, quote=False):
     else:
         update.message.reply_photo(img, quote=quote)
 
+def reply_file(update, file_, quote=False):
+    if isinstance(file_, str):
+        with open(file_, 'rb') as fp:
+            update.message.reply_document(fp, quote=quote)
+    else:
+        update.message.reply_document(file_, quote=quote)
 
 def reply_keyboard(update, msg, options=None):
     if isinstance(msg, tuple) and len(msg) == 2:
