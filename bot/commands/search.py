@@ -185,5 +185,5 @@ class SearchCommandMixin:
         return self.state.get_search_stats(update)
 
     @command(C.REPLY_TEXT_PAGINATED)
-    def cb_pic_stats(self, *_):
-        return self.state.get_search_stats
+    def cb_pic_stats(self, _, update):
+        return self.state.get_search_stats(update)
