@@ -177,8 +177,8 @@ class SearchCommandMixin:
         return self.state.list_search_requests(update)
 
     @command(C.REPLY_TEXT_PAGINATED)
-    def cb_pic_log(self, *_):
-        return self.state.list_search_requests
+    def cb_pic_log(self, _, update):
+        return self.state.list_search_requests(update)
 
     @command(C.REPLY_TEXT_PAGINATED)
     def cmd_picstats(self, _, update):
