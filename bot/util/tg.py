@@ -302,7 +302,10 @@ def check_permission(bot, user, min_value=Permission.USER):
     return value >= min_value, value > Permission.IGNORED
 
 
-def command(type_, permission=Permission.USER):
+def command(type_, permission=Permission.USER, permission_private=None):
+    if permission_private is None:
+        permission_private = permission
+
     def decorator(method):
         @wraps(method)
         def ret(self, bot, update):
@@ -316,8 +319,14 @@ def command(type_, permission=Permission.USER):
                                      % update.message.text)
                     return
 
+                chat = update.message.chat
+                if chat.type == chat.PRIVATE:
+                    perm = permission_private
+                else:
+                    perm = permission
+
                 perm, reply = check_permission(
-                    self, update.message.from_user, permission
+                    self, update.message.from_user, perm
                 )
                 if not perm:
                     if reply:

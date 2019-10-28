@@ -234,11 +234,6 @@ class BotState:
 
     def confirm_delete_private_context(self, update):
         chat = update.message.chat
-        if chat.type != chat.PRIVATE:
-            raise CommandError(
-                'permission denied: chat.type ("%s") != "%s"'
-                % (chat.type, chat.PRIVATE)
-            )
         if not self.context.has_private(chat):
             raise CommandError('context "%s" does not exist' % chat.id)
         return 'delete private context "%s"?' % chat.id, ['yes', 'no']
@@ -484,9 +479,9 @@ class BotState:
         res = None
 
         private = self.context.get_private(message.chat)
-        if private is not context:
-            self.logger.info('learn private')
-            private.learn_text(text)
+
+        self.logger.info('learn private')
+        private.learn_text(text)
 
         if context is not None:
             if reply:

@@ -12,6 +12,7 @@ from telegram.ext import (
 )
 from telegram.ext.filters import Filters
 
+from .error import CommandError
 from .state import BotState
 from .commands import BotCommands
 from .promise import Promise, PromiseType as PT
@@ -235,7 +236,10 @@ class Bot:
         self.state.apply_aliases(update)
         if update.message.text[0] == '/':
             return self.commands.on_command(bot, update)
-        return self.state.on_text(update)
+        try:
+            return self.state.on_text(update)
+        except CommandError as ex:
+            self.logger.warning('on_text: %r', ex)
 
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)

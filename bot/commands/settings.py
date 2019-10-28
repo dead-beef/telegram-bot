@@ -41,7 +41,7 @@ class SettingsCommandMixin:
             ret = 'no aliases'
         return ret, True
 
-    @command(C.REPLY_TEXT, P.ADMIN)
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
     def cmd_aadd(self, _, update):
         help_ = 'usage: /aadd <regexp>=<string>'
         args = get_command_args(update.message, help=help_)
@@ -55,14 +55,14 @@ class SettingsCommandMixin:
         self.state.db.add_chat_alias(update.message.chat, expr, repl)
         return '%s rows affected' % self.state.db.cursor.rowcount
 
-    @command(C.REPLY_TEXT, P.ADMIN)
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
     def cmd_adel(self, _, update):
         id_ = get_command_args(update.message, help='usage: /adel <id>')
         id_ = int(id_)
         self.state.db.delete_chat_alias(update.message.chat, id_)
         return '%s rows affected' % self.state.db.cursor.rowcount
 
-    @command(C.REPLY_TEXT, P.ADMIN)
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
     def cmd_aclear(self, _, update):
         self.state.db.delete_chat_alias(update.message.chat, None)
         return '%s rows affected' % self.state.db.cursor.rowcount
@@ -71,46 +71,46 @@ class SettingsCommandMixin:
     def cmd_settings(self, _, update):
         return self.state.show_settings(update)
 
-    @command(C.GET_OPTIONS)
+    @command(C.GET_OPTIONS, P.ADMIN, P.USER)
     def cmd_setcontext(self, _, update):
         return self.state.list_contexts(update)
 
-    @command(C.SET_OPTION)
+    @command(C.SET_OPTION, P.ADMIN, P.USER)
     def cb_context(self, _, update):
         return self.state.set_context(update)
 
-    @command(C.GET_OPTIONS)
+    @command(C.GET_OPTIONS, P.ROOT, P.USER)
     def cmd_delprivate(self, _, update):
         return self.state.confirm_delete_private_context(update)
 
-    @command(C.SET_OPTION)
+    @command(C.SET_OPTION, P.ROOT, P.USER)
     def cb_delete_private_context(self, _, update):
         return self.state.delete_private_context(update)
 
-    @command(C.GET_OPTIONS)
+    @command(C.GET_OPTIONS, P.ADMIN, P.USER)
     def cmd_setorder(self, _, update):
         return self.state.list_orders(update)
 
-    @command(C.SET_OPTION)
+    @command(C.SET_OPTION, P.ADMIN, P.USER)
     def cb_order(self, _, update):
         return self.state.set_order(update)
 
-    @command(C.GET_OPTIONS)
+    @command(C.GET_OPTIONS, P.ADMIN, P.USER)
     def cmd_setlearn(self, _, update):
         return self.state.list_learn_modes(update)
 
-    @command(C.SET_OPTION)
+    @command(C.SET_OPTION, P.ADMIN, P.USER)
     def cb_learn_mode(self, _, update):
         return self.state.set_learn_mode(update)
 
-    @command(C.REPLY_TEXT)
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
     def cmd_settrigger(self, _, update):
         return self.state.set_trigger(update)
 
-    @command(C.REPLY_TEXT)
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
     def cmd_setreplylength(self, _, update):
         return self.state.set_reply_length(update)
 
-    @command(C.REPLY_TEXT)
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
     def cmd_unsettrigger(self, _, update):
         return self.state.remove_trigger(update)
