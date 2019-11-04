@@ -26,7 +26,8 @@ from bot.util import (
     update_handler,
     reply_photo,
     reply_file,
-    CommandType as C
+    CommandType as C,
+    Permission as P
 )
 
 
@@ -173,6 +174,14 @@ class BotCommandBase:
         msg = update.callback_query.message
         cmd = None
         has_cmd = False
+
+        permission = self.state.db.get_user_data(
+            update.callback_query.from_user,
+            'permission'
+        )
+
+        if permission <= P.BANNED:
+            return
 
         if msg.text:
             for pattern in (r'^select\s+(.+)$',

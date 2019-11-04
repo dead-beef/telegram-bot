@@ -304,7 +304,7 @@ class BotState:
 
         permission = self.db.get_user_data(message.from_user, 'permission')
 
-        if permission <= P.IGNORED:
+        if permission <= P.BANNED:
             self.logger.info('ignored user: reply=False')
         elif message.chat.type == message.chat.PRIVATE:
             self.logger.info('private chat: reply=True')
