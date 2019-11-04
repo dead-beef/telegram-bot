@@ -19,6 +19,7 @@ from .util import (
     get_message_filename,
     reply_text,
     reply_photo,
+    Permission as P,
     FILE_TYPES
 )
 from .database import BotDatabase
@@ -301,7 +302,11 @@ class BotState:
         quote = False
         text = get_message_text(message)
 
-        if message.chat.type == message.chat.PRIVATE:
+        permission = self.db.get_user_data(message.from_user, 'permission')
+
+        if permission <= P.IGNORED:
+            self.logger.info('ignored user: reply=False')
+        elif message.chat.type == message.chat.PRIVATE:
             self.logger.info('private chat: reply=True')
             reply = True
         elif (message.reply_to_message
