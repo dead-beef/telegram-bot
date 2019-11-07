@@ -175,6 +175,7 @@ class GameCommandMixin:
         args = update.callback_query.data.split()
         pid = int(args[0]) if args else None
         action = args[1] if len(args) > 1 else None
+        pid2 = int(args[2]) if len(args) > 2 else None
 
         if action is not None and self.game.is_in_battle(user.id):
             return
@@ -184,15 +185,15 @@ class GameCommandMixin:
         else:
             res = None
             keyboard = None
-            r = [InlineKeyboardButton('release',
-                                      callback_data='mon %d r' % pid)]
-            rr = [InlineKeyboardButton('confirm release',
-                                       callback_data='mon %d rr' % pid)]
-            ev = [InlineKeyboardButton('evolve',
-                                       callback_data='mon %d e' % pid)]
-            m = [InlineKeyboardButton('moves',
-                                      callback_data='mmove %d' % pid)]
-            back = [InlineKeyboardButton('back', callback_data='mon')]
+            r = InlineKeyboardButton('release',
+                                     callback_data='mon %d r' % pid)
+            rr = InlineKeyboardButton('confirm release',
+                                      callback_data='mon %d rr' % pid)
+            ev = InlineKeyboardButton('evolve',
+                                      callback_data='mon %d e' % pid)
+            m = InlineKeyboardButton('moves',
+                                     callback_data='mmove %d' % pid)
+            back = InlineKeyboardButton('back', callback_data='mon')
 
             if action == 'rr':
                 res = self.game.release_pokemon(pid)
@@ -200,13 +201,27 @@ class GameCommandMixin:
             elif action == 'r':
                 keyboard = [rr, ev, m, back]
             elif action == 'e':
-                res = 'not implemented'
+                if pid2 is not None:
+                    try:
+                        self.game.evolve_pokemon(pid, pid2)
+                        keyboard = [r, ev, m, back]
+                    except ValueError as ex:
+                        res = str(ex)
+                if pid2 is None or keyboard is None:
+                    keyboard = [
+                        InlineKeyboardButton(
+                            '%s%s %s' % data[1:],
+                            callback_data='mon %d e %d' % (pid, data[0])
+                        )
+                        for data in self.game.get_evolutions(pid)
+                    ]
+                    keyboard.append(back)
 
             if res is None:
                 res = self.game.pokemon_info(pid)
             if keyboard is None:
                 keyboard = [r, ev, m, back]
-            keyboard = InlineKeyboardMarkup(keyboard)
+            keyboard = InlineKeyboardMarkup(chunks(keyboard, 2))
 
         update.callback_query.message.edit_text(
             res,

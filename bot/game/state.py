@@ -1,5 +1,6 @@
 import logging
 from random import randint, shuffle, choice
+from itertools import chain
 
 
 class GameState:
@@ -99,10 +100,33 @@ class GameState:
         self.db.save()
         return ret
 
+    def remove_user_item(self, user_id, item_id, count=1):
+        self.db.cursor.execute(
+            'SELECT `item_count` FROM `user_inventory`'
+            ' WHERE `user_id`=? AND `item_id`=?',
+            (user_id, item_id)
+        )
+        count_ = self.db.cursor.fetchone()
+        if count_ is None:
+            return
+        if count_ <= count:
+            self.db.cursor.execute(
+                'DELETE FROM `user_inventory`'
+                ' WHERE `user_id`=? AND `item_id`=?',
+                (user_id, item_id)
+            )
+        else:
+            self.db.cursor.execute(
+                'UPDATE `user_inventory` SET `item_count`=?'
+                ' WHERE `user_id`=? AND `item_id`=?',
+                (count_ - count, user_id, item_id)
+            )
+        self.db.save()
+
     def get_user_pokemon(self, user):
         self.db.cursor.execute(
             'SELECT `up`.`id`, `t`.`icon`, COALESCE(`t2`.`icon`, \'\'),'
-            '       `p`.`name`, `up`.`level`, `up`.`hp`, `up`.`max_hp`'
+            '       `p`.`name`, `up`.`level`, `up`.`hp`'
             ' FROM `user_pokemon` `up`'
             '  LEFT JOIN `pokemon` `p` ON `up`.`pokemon_id` = `p`.`id`'
             '  LEFT JOIN `pokemon_type` `t` ON `p`.`type_id` = `t`.`id`'
@@ -111,7 +135,43 @@ class GameState:
             ' ORDER BY `p`.`name`, `up`.`level`',
             (user.id,)
         )
-        return self.db.cursor.fetchall()
+        return [
+            tuple(chain(data, (self.get_pokemon_stats(data[0])[0],)))
+            for data in self.db.cursor.fetchall()
+        ]
+
+    def get_pokemon_stats(self, id_):
+        self.db.cursor.execute(
+            'SELECT `pokemon_id`, `level`, `iv_hp`, `iv_atk`,'
+            '  `iv_sp_atk`, `iv_def`, `iv_sp_def`, `iv_speed`'
+            ' FROM `user_pokemon`'
+            ' WHERE `id`=?',
+            (id_,)
+        )
+        row = self.db.cursor.fetchone()
+        if row is None:
+            raise ValueError('invalid pokemon id: %s' % id_)
+        pid = row[0]
+        level = row[1]
+        iv_hp = row[2]
+        ivs = row[3:]
+
+        self.db.cursor.execute(
+            'SELECT `hp`, `atk`, `sp_atk`, `def`, `sp_def`, `speed`'
+            ' FROM `pokemon` WHERE `id`=?',
+            (pid,)
+        )
+        row = self.db.cursor.fetchone()
+        hp = row[0]
+        stats = row[1:]
+
+        hp = round((2 * hp + iv_hp) * level / 100) + level + 10
+        stats = (
+            round(2 * stat + iv / 100) + 5
+            for stat, iv in zip(stats, ivs)
+        )
+
+        return list(chain((hp,), stats))
 
     def get_starter_pokemon(self):
         self.db.cursor.execute(
@@ -146,6 +206,21 @@ class GameState:
             '    AND `upm`.`move_id` = `m`.`id`'
             ' WHERE `up`.`id`=?'
             '  AND `pm`.`min_level` <= `up`.`level`',
+            (id_,)
+        )
+        return self.db.cursor.fetchall()
+
+    def get_evolutions(self, id_):
+        self.db.cursor.execute(
+            'SELECT DISTINCT `p`.`id`, `t`.`icon`,'
+            '                COALESCE(`t2`.`icon`, \'\'), `p`.`name`'
+            ' FROM `user_pokemon` `up`'
+            '  LEFT JOIN `pokemon_evolution` `pe`'
+            '            ON `pe`.`from`=`up`.`pokemon_id`'
+            '  LEFT JOIN `pokemon` `p` ON `p`.`id`=`pe`.`to`'
+            '  LEFT JOIN `pokemon_type` `t` ON `p`.`type_id` = `t`.`id`'
+            '  LEFT JOIN `pokemon_type` `t2` ON `p`.`type_2_id` = `t2`.`id`'
+            ' WHERE `up`.`id`=? AND `pe`.`to` IS NOT NULL',
             (id_,)
         )
         return self.db.cursor.fetchall()
@@ -241,30 +316,58 @@ class GameState:
             ' WHERE `id`=?',
             (exp, level, id_)
         )
-        if level == level_:
-            self.db.save()
-            return False
+        level_changed = level != level_
+        self.db.save()
+        return level_changed
 
+    def evolve_pokemon(self, id_, new_pid):
+        required = []
         self.db.cursor.execute(
-            'SELECT `base_hp`, `base_hp`, `base_atk`,'
-            '  `base_sp_atk`, `base_def`, `base_sp_def`, `base_speed`'
-            ' FROM `user_pokemon`'
-            ' WHERE `id`=?',
-            (id_,)
+            'SELECT `pe`.`min_level`, `pe`.`item_id`,'
+            '       `up`.`user_id`, `up`.`level`,'
+            '       `ui`.`item_count`, `i`.`name`'
+            ' FROM `user_pokemon` `up`'
+            '  LEFT JOIN `pokemon_evolution` `pe`'
+            '   ON `pe`.`from`=`up`.`pokemon_id`'
+            '  LEFT JOIN `user_inventory` `ui`'
+            '   ON `ui`.`user_id`=`up`.`user_id`'
+            '      AND `ui`.`item_id`=`pe`.`item_id`'
+            '  LEFT JOIN `item` `i` ON `i`.`id`=`pe`.`item_id`'
+            ' WHERE `up`.`id`=? AND `pe`.`to`=?',
+            (id_, new_pid)
         )
-        k = (1 + level / 50)
-        stats = [int(stat * k) for stat in self.db.cursor.fetchone()]
-        stats.append(id_)
+        ev = self.db.cursor.fetchall()
+        if not ev:
+            raise ValueError('invalid evolution')
+        for min_level, item_id, user_id, level, item_count, item_name in ev:
+            r = []
+            if min_level is not None and level < min_level:
+                r.append('level %d' % min_level)
+            if item_id is not None and (item_count is None or item_count <= 0):
+                if item_name:
+                    r.append('item "%s"' % item_name)
+                else:
+                    r.append('item #%d' % item_id)
+            if r:
+                required.append('and'.join(r))
+            else:
+                if item_id is not None:
+                    self.remove_user_item(user_id, item_id)
+                self.db.cursor.execute(
+                    'UPDATE `user_pokemon` SET `pokemon_id`=? WHERE `id`=?',
+                    (new_pid, id_)
+                )
+                self.heal_pokemon(id_)
+                return
+        raise ValueError('required %s' % 'or'.join(required))
+
+    def heal_pokemon(self, id_):
+        stats = self.get_pokemon_stats(id_)
         self.db.cursor.execute(
-            'UPDATE `user_pokemon`'
-            ' SET `hp`=?, `max_hp`=?, `atk`=?,'
-            '  `sp_atk`=?, `def`=?, `sp_def`=?,'
-            '  `speed`=?'
-            ' WHERE `id`=?',
-            stats
+            'UPDATE `user_pokemon` SET `hp`=? WHERE `id`=?',
+            (stats[0], id_)
         )
         self.db.save()
-        return True
 
     def heal(self, user):
         self.db.cursor.execute(
@@ -274,24 +377,28 @@ class GameState:
         ids = [row[0] for row in self.db.cursor.fetchall()]
         row_count = 0
         params = ','.join('?' for _ in ids)
-        self.db.cursor.execute(
-            'UPDATE `user_pokemon` SET `hp`=`max_hp` WHERE `id` IN (%s)'
-            % params,
-            ids
-        )
-        row_count = self.db.cursor.rowcount
+
+        for id_ in ids:
+            self.heal_pokemon(id_)
+            row_count += self.db.cursor.rowcount
+
         self.db.cursor.execute(
             'UPDATE `user_pokemon_move` SET `pp`=`max_pp`'
             ' WHERE `user_pokemon_id` IN (%s)' % params,
             ids
         )
         row_count += self.db.cursor.rowcount
+
         self.db.save()
         return '%d rows affected' % row_count
 
     @staticmethod
     def randomize(stat):
         return stat * randint(75, 125) // 100
+
+    @staticmethod
+    def random_iv():
+        return randint(0, 31)
 
     def create_pokemon(self, id_, user_id,
                        min_level, max_level, evolve=False):
@@ -320,9 +427,7 @@ class GameState:
                 id_ = choice(rows)[0]
 
         self.db.cursor.execute(
-            'SELECT `p`.`height`, `p`.`weight`, `p`.`hp`, `p`.`atk`,'
-            '  `p`.`sp_atk`, `p`.`def`, `p`.`sp_def`,'
-            '  `p`.`speed`, `e`.`exp`'
+            'SELECT `p`.`height`, `p`.`weight`, `e`.`exp`'
             ' FROM `pokemon` `p`'
             '  LEFT JOIN `pokemon_exp_to_level` `e`'
             '   ON `p`.`exp_type_id` = `e`.`exp_type_id`'
@@ -330,23 +435,22 @@ class GameState:
             (id_, level)
         )
 
-        (height, weight, hp, atk, sp_atk,
-         def_, sp_def, speed, exp) = self.db.cursor.fetchone()
+        (height, weight, exp) = self.db.cursor.fetchone()
 
         height = self.randomize(height)
         weight = self.randomize(weight)
-        hp = self.randomize(hp)
-        atk = self.randomize(atk)
-        sp_atk = self.randomize(sp_atk)
-        def_ = self.randomize(def_)
-        sp_def = self.randomize(sp_def)
-        speed = self.randomize(speed)
+        hp = self.random_iv()
+        atk = self.random_iv()
+        sp_atk = self.random_iv()
+        def_ = self.random_iv()
+        sp_def = self.random_iv()
+        speed = self.random_iv()
 
         self.db.cursor.execute(
             'INSERT INTO `user_pokemon`'
             ' (`user_id`, `pokemon_id`,`height`,`weight`,'
-            '  `level`, `exp`, `base_hp`, `base_atk`, `base_sp_atk`,'
-            '  `base_def`, `base_sp_def`, `base_speed`)'
+            '  `level`, `exp`, `iv_hp`, `iv_atk`, `iv_sp_atk`,'
+            '  `iv_def`, `iv_sp_def`, `iv_speed`)'
             ' VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
             (user_id, id_, height, weight, -1, 0, hp,
              atk, sp_atk, def_, sp_def, speed)
@@ -354,7 +458,7 @@ class GameState:
         ret = self.db.cursor.lastrowid
         self.add_pokemon_exp(ret, exp)
         self.add_random_moves(ret, self.max_pokemon_moves)
-        self.db.save()
+        self.heal_pokemon(ret)
         return ret
 
     def create_random_encounter(self, user_id,
@@ -378,7 +482,7 @@ class GameState:
     def pokemon_info_short(self, id_):
         self.db.cursor.execute(
             'SELECT `t`.`icon`, COALESCE(`t2`.`icon`, \'\'), `p`.`name`,'
-            '  `up`.`level`, `up`.`hp`, `up`.`max_hp`'
+            '  `up`.`level`, `up`.`hp`'
             ' FROM `user_pokemon` `up`'
             '  LEFT JOIN `pokemon` `p` ON `up`.`pokemon_id`=`p`.`id`'
             '  LEFT JOIN `pokemon_type` `t` ON `t`.`id`=`p`.`type_id`'
@@ -386,17 +490,18 @@ class GameState:
             ' WHERE `up`.`id`=?',
             (id_,)
         )
-        stats = self.db.cursor.fetchone()
-        if stats is None:
+        data = self.db.cursor.fetchone()
+        if data is None:
             return 'pokemon "%s" does not exist' % id_
-        return '%s%s %s LV %s HP %s / %s' % stats
+        stats = self.get_pokemon_stats(id_)
+        return '%s%s %s LV %s HP %s / %s' % chain(data, (stats[0],))
 
     def pokemon_info(self, id_):
         self.db.cursor.execute(
             'SELECT `t`.`icon`, COALESCE(`t2`.`icon`, \'\'), `p`.`name`,'
-            '  `up`.`level`, `up`.`exp`, `up`.`hp`, `up`.`max_hp`,'
-            '  `up`.`atk`, `up`.`sp_atk`, `up`.`def`, `up`.`sp_def`,'
-            '  `up`.`speed`,'
+            '  `up`.`level`, `up`.`exp`, `up`.`hp`,'
+            '  `up`.`iv_hp`, `up`.`iv_atk`, `up`.`iv_sp_atk`,'
+            '  `up`.`iv_def`, `up`.`iv_sp_def`, `up`.`iv_speed`,'
             '  CAST(`up`.`height` AS FLOAT) / 10.0,'
             '  CAST(`up`.`weight` AS FLOAT) / 10.0'
             ' FROM `user_pokemon` `up`'
@@ -406,27 +511,28 @@ class GameState:
             ' WHERE `up`.`id`=?',
             (id_,)
         )
-        stats = self.db.cursor.fetchone()
-        if stats is None:
+        data = self.db.cursor.fetchone()
+        if data is None:
             return 'pokemon "%s" does not exist' % id_
+        stats = self.get_pokemon_stats(id_)
         ret = (
             '{0}{1} {2}\n'
             '`\n'
             'Height: {12:.1f}m\n'
             'Weight: {13:.1f}kg\n'
             '\n'
-            'HP:     {5} / {6}\n'
+            'HP:     {5} / {14} | {6}\n'
             'LV:     {3}\n'
             'EXP:    {4}\n'
             '\n'
-            'ATK:    {7}\n'
-            'SP.ATK: {8}\n'
-            'DEF:    {9}\n'
-            'SP.DEF: {10}\n'
-            'SPD:    {11}\n'
+            'ATK:    {15:3} | {7:2}\n'
+            'SP.ATK: {16:3} | {8:2}\n'
+            'DEF:    {17:3} | {9:2}\n'
+            'SP.DEF: {18:3} | {10:2}\n'
+            'SPD:    {19:3} | {11:2}\n'
             '`\n'
             'Moves:\n'
-        ).format(*stats)
+        ).format(*chain(data, stats))
         self.db.cursor.execute(
             'SELECT `t`.`icon`, `m`.`name`, `um`.`pp`, `m`.`pp`'
             ' FROM `user_pokemon_move` `um`'
@@ -447,17 +553,19 @@ class GameState:
 
     def is_in_battle(self, user_id):
         self.db.cursor.execute(
-            'SELECT COUNT(*) FROM `pokemon_battle`'
-            ' WHERE `user_id`=? OR `user_2_id`=?',
-            (user_id, user_id)
+            'SELECT COUNT(*) FROM `pokemon_battle_user` WHERE `user_id`=?',
+            (user_id,)
         )
         return bool(self.db.cursor.fetchone()[0])
 
     def flee(self, user_id):
         self.db.cursor.execute(
             'DELETE FROM `pokemon_battle`'
-            ' WHERE `user_id`=? OR `user_2_id`=?',
-            (user_id, user_id)
+            ' WHERE `id` IN ('
+            '  SELECT DISTINCT `pokemon_battle_id`'
+            '   FROM `pokemon_battle_user` WHERE `user_id`=?'
+            ' )',
+            (user_id,)
         )
         ret = self.db.cursor.rowcount
         self.remove_unused_pokemon()
@@ -467,10 +575,10 @@ class GameState:
         self.db.cursor.execute(
             'DELETE FROM `user_pokemon` WHERE `id` IN ('
             '  SELECT `up`.`id` FROM `user_pokemon` `up`'
-            '    LEFT JOIN `pokemon_battle` `b`'
+            '    LEFT JOIN `pokemon_battle_user` `b`'
             '     ON `b`.`user_pokemon_id`=`up`.`id`'
-            '        OR `b`.`user_2_pokemon_id`=`up`.`id`'
-            '    WHERE `up`.`user_id` IS NULL AND `b`.`id` IS NULL'
+            '    WHERE `up`.`user_id` IS NULL'
+            '     AND `b`.`user_pokemon_id` IS NULL'
             ')'
         )
         self.db.save()
