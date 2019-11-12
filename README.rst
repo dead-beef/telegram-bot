@@ -34,7 +34,7 @@ Usage
 ::
 
     > python -m bot -h
-    usage: __main__.py [-h] [-P POLL] [-p PROXY] [-d DATA_DIR] [-m FILE]
+    usage: __main__.py [-h] [-P POLL] [-p PROXY] [-d DATA_DIR]
                        [-l {critical,error,warning,info,debug}]
                        TOKEN_OR_FILE
 
@@ -48,19 +48,9 @@ Usage
                             proxy (default: socks5://127.0.0.1:9050/ (tor))
       -d DATA_DIR, --data-dir DATA_DIR
                             bot data directory (default: ~/.bot)
-      -m FILE, --message-log FILE
-                            message log file
-                            ("-" - stdout, "none" - disable message logging)
-                            (default: <bot directory>/messages.log)
       -l {critical,error,warning,info,debug},
       --log-level {critical,error,warning,info,debug}
                             log level (default: info)
-
-
-::
-
-    > python -m bot.merge_db -h
-    usage: merge_db.py <dest_db> <src_db>
 
 
 Licenses
