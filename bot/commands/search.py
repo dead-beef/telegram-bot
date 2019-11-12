@@ -1,14 +1,18 @@
 import re
+import html
 
+from pony.orm import select, count
 from telegram import (
     ChatAction,
     TelegramError,
     InlineKeyboardButton,
-    InlineKeyboardMarkup
+    InlineKeyboardMarkup,
+    ParseMode
 )
 from telegram.error import BadRequest, Unauthorized
 
 from bot.error import SearchError
+from bot.models import get_page, SearchQuery, SearchLog
 from bot.promise import Promise, PromiseType as PT
 from bot.util import (
     remove_control_chars,
@@ -41,13 +45,17 @@ class SearchCommandMixin:
             reply_to = update.message.message_id
 
         learn = Promise.wrap(
-            self.state.db.learn_search_query,
+            self.state.learn_search_query,
             query, user, reset,
             ptype=PT.MANUAL
         )
         self.state.bot.queue.put(learn)
         learn.wait()
         offset = learn.value
+
+        if isinstance(offset, Exception):
+            self.logger.error(offset)
+            return
 
         chat = update.effective_chat
         chat_id = chat.id
@@ -174,16 +182,44 @@ class SearchCommandMixin:
 
     @command(C.REPLY_TEXT_PAGINATED)
     def cmd_piclog(self, _, update):
-        return self.state.list_search_requests(update)
+        page_size = 10
+        if update.callback_query:
+            page = int(update.callback_query.data)
+        else:
+            page = 1
+        offset = page_size * (page - 1)
+        requests, pages = get_page(SearchLog.select(), page, page_size)
+        res = '\n'.join(
+            '{0}. {1} (<b>{2}</b>)'
+            .format(
+                i,
+                html.escape(data.query.query),
+                html.escape(data.user.name)
+            )
+            for i, data in enumerate(requests, offset + 1)
+        )
+        res = 'pic log page %d / %d:\n\n%s' % (page, pages, res)
+        return res, page, pages, False, ParseMode.HTML
 
-    @command(C.REPLY_TEXT_PAGINATED)
-    def cb_pic_log(self, _, update):
-        return self.state.list_search_requests(update)
+    cb_pic_log = cmd_piclog
 
     @command(C.REPLY_TEXT_PAGINATED)
     def cmd_picstats(self, _, update):
-        return self.state.get_search_stats(update)
+        page_size = 10
+        if update.callback_query:
+            page = int(update.callback_query.data)
+        else:
+            page = 1
+        query = select((q, count(log)) for q in SearchQuery for log in q.log)
+        query = query.order_by(-2)
+        stats, pages = get_page(query, page, page_size)
+        offset = page_size * (page - 1)
+        res = '\n'.join(
+            '{0}. {1} (<b>{2}</b>)'
+            .format(i, html.escape(query.query), count)
+            for i, (query, count) in enumerate(stats, offset + 1)
+        )
+        res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
+        return res, page, pages, False, ParseMode.HTML
 
-    @command(C.REPLY_TEXT_PAGINATED)
-    def cb_pic_stats(self, _, update):
-        return self.state.get_search_stats(update)
+    cb_pic_stats = cmd_picstats

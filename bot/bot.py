@@ -3,12 +3,13 @@ from queue import Queue
 from threading import Event
 from functools import partial
 
+from pony.orm import db_session
+
 from telegram import ParseMode
 from telegram.ext import (
     Updater,
     MessageHandler,
-    InlineQueryHandler,
-    run_async
+    InlineQueryHandler
 )
 from telegram.ext.filters import Filters
 
@@ -17,8 +18,6 @@ from .state import BotState
 from .commands import BotCommands
 from .promise import Promise, PromiseType as PT
 from .util import (
-    sanitize_log,
-    get_chat_title,
     update_handler,
     download_file,
     command,
@@ -29,25 +28,19 @@ from .util import (
 
 class Bot:
     LOG_FORMAT = '[%(asctime).19s] [%(name)s] [%(levelname)s] %(message)s'
-    MSG_LOG_FORMAT = ('[%(asctime).19s]'
-                      ' [%(chat_id)s | %(chat_name)s]'
-                      ' [%(user_id)s | %(user_link)s | %(user_name)s]'
-                      ' %(message)s')
 
-    def __init__(self, tokens, proxy=None, log_messages=False, root=None):
+    def __init__(self, tokens, proxy=None, root=None):
         if not tokens:
             raise ValueError('no tokens')
 
         self.logger = logging.getLogger('bot.info')
-        self.msg_logger = logging.getLogger('bot.message')
         self.logger.info(
-            'init: tokens=%s proxy=%s log_messages=%s root=%s',
-            tokens, proxy, log_messages, root
+            'init: tokens=%s proxy=%s root=%s',
+            tokens, proxy, root
         )
 
         self.tokens = [token.strip() for token in tokens]
         self.proxy = proxy.strip() if proxy is not None else None
-        self.log_messages = log_messages
         self.queue = Queue()
         self.stopped = Event()
 
@@ -177,7 +170,7 @@ class Bot:
         self.logger.debug('log_update %s', update)
 
         learn = Promise.wrap(
-            self.state.db.learn_update,
+            self.state.learn_update,
             update,
             ptype=PT.MANUAL
         )
@@ -185,41 +178,6 @@ class Bot:
         learn.catch(
             lambda ex: self.logger.error('log_update: %r: %s', ex, update)
         ).wait()
-
-        if not self.log_messages:
-            return
-
-        if update.effective_message is not None:
-            msg = update.effective_message
-            extra = {
-                'chat_id': msg.chat.id,
-                'user_id': msg.from_user.id,
-                'chat_name': sanitize_log(get_chat_title(msg.chat)),
-                'user_link': '@' + sanitize_log(str(msg.from_user.username)),
-                'user_name': sanitize_log('%s %s' % (
-                    str(msg.from_user.first_name),
-                    str(msg.from_user.last_name)
-                ))
-            }
-            text = sanitize_log(msg.text or msg.caption or '', True)
-        elif update.inline_query is not None:
-            msg = update.inline_query
-            extra = {
-                'chat_id': None,
-                'user_id': msg.from_user.id,
-                'chat_name': '<inline query>',
-                'user_link': '@' + sanitize_log(str(msg.from_user.username)),
-                'user_name': sanitize_log('%s %s' % (
-                    str(msg.from_user.first_name),
-                    str(msg.from_user.last_name)
-                ))
-            }
-            text = sanitize_log(msg.query, True)
-        else:
-            text = None
-
-        if text is not None:
-            self.msg_logger.info(text, extra=extra)
 
     def download_file(self, message, dirs, deferred=None, overwrite=False):
         self.primary.dispatcher.run_async(download_file, message,
@@ -232,14 +190,12 @@ class Bot:
     def on_inline(self, bot, update):
         self.commands.inline_query(bot, update)
 
+    @db_session
     def _on_text(self, bot, update):
         self.state.apply_aliases(update)
         if update.message.text[0] == '/':
             return self.commands.on_command(bot, update)
-        try:
-            return self.state.on_text(update)
-        except CommandError as ex:
-            self.logger.warning('on_text: %r', ex)
+        return self.state.on_text(update)
 
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)
@@ -256,7 +212,7 @@ class Bot:
         sticker = update.message.sticker
         if sticker.set_name is not None:
             need_sticker_set = Promise.wrap(
-                self.state.db.need_sticker_set,
+                self.state.need_sticker_set,
                 sticker.set_name,
                 ptype=PT.MANUAL
             )
@@ -264,7 +220,7 @@ class Bot:
                 lambda res: bot.getStickerSet(sticker.set_name) if res else None
             )
             learn_sticker_set = get_sticker_set.then(
-                self.state.db.learn_sticker_set,
+                self.state.learn_sticker_set,
                 ptype=PT.MANUAL
             )
             self.queue.put(need_sticker_set)

@@ -1,7 +1,7 @@
 import os
 import re
 import json
-import html
+import time
 import random
 import logging
 import tempfile
@@ -9,12 +9,12 @@ import subprocess
 from collections import defaultdict
 from threading import Lock
 
-from telegram import ChatAction, TelegramError, ParseMode
-from telegram.ext import Dispatcher
+from pony.orm import db_session
+from telegram import ChatAction, TelegramError
 
 from .util import (
-    trunc,
     strip_command,
+    get_file,
     get_message_text,
     get_message_filename,
     reply_text,
@@ -22,7 +22,11 @@ from .util import (
     Permission as P,
     FILE_TYPES
 )
-from .database import BotDatabase
+from .models import (
+    connect, flush, get_or_create, update_or_create,
+    StickerSet, Sticker, User, UserPhone, Chat, Message,
+    SearchQuery, SearchLog
+)
 from .context_cache import ContextCache
 from .formatter import Formatter
 from .error import CommandError
@@ -42,7 +46,10 @@ class BotState:
                  async_max=ASYNC_MAX_DEFAULT,
                  process_timeout=PROCESS_TIMEOUT_DEFAULT,
                  query_timeout=QUERY_TIMEOUT_DEFAULT,
-                 proxy=None):
+                 proxy=None,
+                 user_update_interval=86400,
+                 chat_update_interval=86400,
+                 sticker_set_update_interval=86400):
         if root is None:
             root = os.path.expanduser('~/.bot')
 
@@ -50,12 +57,17 @@ class BotState:
         self.id = id_
         self.username = username
         self.root = root
+        self.user_update_interval = user_update_interval
+        self.chat_update_interval = chat_update_interval
+        self.sticker_set_update_interval = sticker_set_update_interval
         self.logger = logging.getLogger('bot.state')
         self.context = ContextCache(os.path.join(self.root, 'data'))
 
         self.default_file_dir = os.path.join(self.root, 'document')
         self.file_dir = defaultdict(lambda: self.default_file_dir)
         self.tmp_dir = tempfile.mkdtemp(prefix=__name__ + '.')
+        self.db_path = os.path.join(self.root, 'bot.db')
+        connect(self.db_path)
 
         self.search = Search(proxy=proxy)
 
@@ -83,11 +95,9 @@ class BotState:
             os.makedirs(dir_, exist_ok=True)
             self.file_dir[type_] = dir_
 
-        self.db = BotDatabase(os.path.join(self.root, 'bot.db'))
-
     def save(self):
         self.logger.info('saving bot state')
-        self.db.save()
+        flush()
 
     def run_async(self, func, *args, **kwargs):
         def _run_async():
@@ -120,6 +130,188 @@ class BotState:
                 self.async_running -= 1
             raise
 
+    @db_session
+    def need_sticker_set(self, name):
+        set_ = StickerSet.get(name=name)
+
+        self.logger.info('need_sticker_set: name=%s res=%r', name, set_)
+
+        if set_ is None:
+            return True
+
+        if self.sticker_set_update_interval >= 0:
+            current_time = int(time.time())
+            last_update = set_.last_update
+            if current_time - last_update >= self.sticker_set_update_interval:
+                return True
+
+        return False
+
+    @db_session
+    def learn_sticker_set(self, data):
+        if data is None:
+            self.logger.info('not learning sticker set')
+            return None
+
+        current_time = int(time.time())
+
+        self.logger.info(
+            'learn_sticker_set: name=%s title=%s time=%s',
+            data.name, data.title, current_time
+        )
+
+        set_ = StickerSet.get(name=data.name)
+        if set_ is None:
+            set_ = StickerSet(
+                name=data.name,
+                title=data.title,
+                last_update=current_time
+            )
+            self.save()
+        else:
+            set_.name = data.name
+            set_.title = data.title
+            set_.last_update = current_time
+
+        has_sticker = set(s.file_id for s in set_.stickers)
+        for sticker in set_.stickers:
+            if sticker.file_id not in has_sticker:
+                Sticker(
+                    set=set_,
+                    file_id=sticker.file_id,
+                    emoji=sticker.emoji
+                )
+
+        return set_
+
+    @db_session
+    def learn_user(self, data):
+        return update_or_create(
+            User, data.id, self.user_update_interval,
+            first_name=data.first_name, last_name=data.last_name,
+            username=data.username
+        )
+
+    @db_session
+    def learn_user_phone(self, user_id, phone):
+        ret = UserPhone.get(user=user_id, phone=phone)
+        if ret is not None:
+            return ret
+        return UserPhone(
+            user=user_id, phone=phone,
+            timestamp=int(time.time())
+        )
+
+    @db_session
+    def learn_contact(self, contact):
+        if contact.user_id is None:
+            return None
+        get_or_create(
+            User, contact.user_id,
+            first_name=contact.first_name,
+            last_name=contact.last_name
+        )
+        if contact.phone_number is not None:
+            self.save()
+            return self.learn_user_phone(
+                contact.user_id,
+                contact.phone_number
+            )
+
+    @db_session
+    def learn_chat(self, chat):
+        return update_or_create(
+            Chat, chat.id, self.chat_update_interval,
+            first_name=chat.first_name,
+            last_name=chat.last_name,
+            username=chat.username,
+            title=chat.title,
+            invite_link=chat.invite_link
+        )
+
+    @db_session
+    def learn_message(self, message):
+        if message.forward_from is not None:
+            self.learn_user(message.forward_from)
+        if message.forward_from_chat is not None:
+            self.learn_chat(message.forward_from_chat)
+
+        if message.contact is not None:
+            return self.learn_contact(message.contact)
+
+        msg_id = message.message_id
+        chat_id = message.chat.id
+        if message.from_user is None:
+            user = None
+        else:
+            user = self.learn_user(message.from_user)
+
+        timestamp = int(message.date.timestamp())
+        text = message.text or message.caption
+        file_id = None
+        file_path = None
+        file_name = None
+        sticker_id = None
+
+        try:
+            ftype, file_id = get_file(message)
+        except ValueError:
+            pass
+        else:
+            file_path = os.path.join(ftype, get_message_filename(message))
+
+        if message.sticker:
+            sticker_id = message.sticker.file_id
+
+        return Message(
+            id_in_chat=msg_id,
+            chat=chat_id, user=user,
+            timestamp=timestamp, text=text, file_id=file_id,
+            file_path=file_path, file_name=file_name,
+            sticker_id=sticker_id
+        )
+
+    @db_session
+    def learn_inline_query(self, query):
+        timestamp = int(time.time())
+        inline_query = query.query
+        user = self.learn_user(query.from_user)
+        return Message(
+            id_in_chat=-1,
+            chat=None, user=user,
+            timestamp=timestamp, inline_query=inline_query
+        )
+
+    @db_session
+    def learn_update(self, update):
+        try:
+            if update.effective_chat is not None:
+                self.learn_chat(update.effective_chat)
+            if update.effective_user is not None:
+                self.learn_user(update.effective_user)
+            if update.effective_message is not None:
+                self.learn_message(update.effective_message)
+            if update.inline_query is not None:
+                self.learn_inline_query(update.inline_query)
+        except Exception as ex:
+            self.logger.error('learn_update: %r', ex)
+            raise
+
+    @db_session
+    def learn_search_query(self, query, user, reset):
+        query = query.strip().lower()
+        user = self.learn_user(user)
+        query_ = SearchQuery.get(query=query)
+        if query_ is None:
+            query_ = SearchQuery(query=query)
+        if reset:
+            query_.offset = 0
+        else:
+            query_.offset += 1
+        SearchLog(user=user, query=query_, timestamp=int(time.time() * 1000))
+        return query_.offset
+
+
     def apply_aliases(self, update):
         msg = update.message
         if not msg:
@@ -134,8 +326,9 @@ class BotState:
             if self.RE_COMMAND_NO_ARGS.match(msg):
                 msg = '%s %s' % (msg, reply)
 
-        for _, expr, repl in self.db.get_chat_aliases(chat):
-            msg = re.sub(expr, repl, msg, flags=re.I)
+        chat = Chat.from_tg(chat)
+        for alias in chat.aliases:
+            msg = re.sub(alias.regexp, alias.replace, msg, flags=re.I)
 
         if reply and self.RE_COMMAND_NO_ARGS.match(msg):
             msg = '%s %s' % (msg, reply)
@@ -143,10 +336,11 @@ class BotState:
         update.message.text = msg
 
     def get_chat_context(self, chat):
-        context = self.db.get_chat_data(chat, 'context')
-        if context is None:
+        if not isinstance(chat, Chat):
+            chat = Chat.from_tg(chat)
+        if chat.context is None:
             raise CommandError('generator context is not set')
-        return self.context.get(context)
+        return self.context.get(chat.context)
 
     def get_chat_settings(self, chat):
         try:
@@ -154,155 +348,13 @@ class BotState:
         except CommandError:
             return self.context.defaults
 
-    def list_contexts(self, update):
-        ret = self.context.list(update.message.chat.id)
-        if ret:
-            return 'select context', ret
-        raise CommandError('no context available')
-
-    def set_context(self, update):
-        query = update.callback_query
-        chat = query.message.chat
-        name = query.data
-
-        self.logger.info('set_context %s %s', chat.id, name)
-        prev_context, prev_order, prev_learn = self.db.get_chat_data(
-            chat,
-            '`context`,`order`,`learn`'
-        )
-
-        if name == 'new private context':
-            self.logger.info('creating private context %s', chat.id)
-            context = self.context.get_private(chat)
-            name = context.name
-            learn = True
-        else:
-            context = self.context.get(name)
-            learn = prev_learn
-
-        if not context.is_writable:
-            learn = False
-
-        orders = context.get_orders()
-        if prev_order not in orders:
-            order = next(iter(orders))
-        else:
-            order = prev_order
-
-        self.db.set_chat_data(chat, context=name, order=order, learn=learn)
-
-        return 'context: %s -> %s\norder: %s -> %s\nlearn: %s -> %s' % (
-            prev_context, name,
-            prev_order, order,
-            bool(prev_learn), bool(learn)
-        )
-
-    def list_orders(self, update):
-        context = self.get_chat_context(update.message.chat)
-        return 'select order', context.get_orders()
-
-    def set_order(self, update):
-        query = update.callback_query
-        chat = query.message.chat
-        order = int(query.data)
-        self.logger.info('set_order %s %s', chat.id, order)
-        context = self.get_chat_context(chat)
-        if order not in context.get_orders():
-            raise CommandError('invalid order: %s: not in %s' % (
-                order, context.get_orders()
-            ))
-        prev = self.db.get_chat_data(chat, '`order`')
-        self.db.set_chat_data(chat, order=order)
-        return 'order: %s -> %s' % (prev, order)
-
-    def list_learn_modes(self, update):
-        context = self.get_chat_context(update.message.chat)
-        if not context.is_writable:
-            raise CommandError('context "%s" is read only' % context.name)
-        return 'select learn mode', ['on', 'off']
-
-    def set_learn_mode(self, update):
-        query = update.callback_query
-        chat = query.message.chat
-        learn = query.data.lower() == 'on'
-        self.logger.info('set_learn %s %s', chat.id, learn)
-        context = self.get_chat_context(chat)
-        if learn and not context.is_writable:
-            raise CommandError('context %s is read only' % context)
-        prev = bool(self.db.get_chat_data(chat, '`learn`'))
-        self.db.set_chat_data(chat, learn=learn)
-        return 'learn: %s -> %s' % (prev, learn)
-
-    def confirm_delete_private_context(self, update):
-        chat = update.message.chat
-        if not self.context.has_private(chat):
-            raise CommandError('context "%s" does not exist' % chat.id)
-        return 'delete private context "%s"?' % chat.id, ['yes', 'no']
-
-    def delete_private_context(self, update):
-        query = update.callback_query
-        chat = query.message.chat
-        if query.data.lower() == 'yes':
-            context = self.db.get_chat_data(chat, 'context')
-            if context == str(chat.id):
-                self.db.set_chat_data(chat, context=None)
-            self.context.delete_private(chat)
-            return 'deleted private context "%s"' % chat.id
-        return 'cancelled'
-
-    def show_settings(self, update):
-        context, order, learn, trigger = self.db.get_chat_data(
-            update.message.chat,
-            '`context`,`order`,`learn`,`trigger`'
-        )
-        learn = bool(learn)
-        reply = (
-            'settings:\n'
-            '    context: %s\n'
-            '    markov chain order: %s\n'
-            '    learn: %s\n'
-            '    trigger: %s\n'
-        ) % (context, order, learn, trigger)
-        return reply
-
-    def set_trigger(self, update):
-        message = update.message
-        expr = strip_command(message.text)
-        if not expr:
-            raise CommandError('usage: /settrigger <regexp>')
-        else:
-            try:
-                re.compile(expr)
-            except re.error as ex:
-                raise CommandError(ex)
-        prev = self.db.get_chat_data(message.chat, 'trigger')
-        self.db.set_chat_data(message.chat, trigger=expr)
-        return 'trigger: %s -> %s' % (prev, expr)
-
-    def remove_trigger(self, update):
-        prev = self.db.get_chat_data(update.message.chat, 'trigger')
-        self.db.set_chat_data(update.message.chat, trigger=None)
-        return 'trigger: %s -> None' % prev
-
-    def set_reply_length(self, update):
-        message = update.message
-        length = strip_command(message.text)
-        if not length:
-            raise CommandError('usage: /setreplylength <number>')
-        try:
-            length = max(8, min(int(length), 256))
-        except ValueError as ex:
-            raise CommandError(ex)
-        prev = self.db.get_chat_data(message.chat, 'reply_max_length')
-        self.db.set_chat_data(message.chat, reply_max_length=length)
-        return 'max reply length: %d -> %d' % (prev, length)
-
     def _need_reply(self, message):
         reply = False
         quote = False
         text = get_message_text(message)
 
-        permission = self.db.get_user_data(message.from_user, 'permission')
+        user = User.from_tg(message.from_user)
+        permission = user.permission
 
         if permission <= P.BANNED:
             self.logger.info('ignored user: reply=False')
@@ -324,7 +376,8 @@ class BotState:
                 quote = True
                 reply = True
             else:
-                trigger = self.db.get_chat_data(message.chat, 'trigger')
+                chat = Chat.from_tg(message.chat)
+                trigger = chat.trigger
                 if trigger is not None and re.search(trigger, text, re.I):
                     self.logger.info('trigger: reply=True')
                     quote = True
@@ -333,19 +386,25 @@ class BotState:
         return reply, quote
 
     def random_text(self, update):
-        context, order, length = self.db.get_chat_data(
-            update.message.chat,
-            '`context`,`order`,`reply_max_length`'
-        )
-        if context is None:
+        chat = Chat.from_tg(update.message.chat)
+        if chat.context is None:
             self.logger.info('no context')
             raise CommandError('generator context is not set')
-        context = self.context.get(context)
+        context = self.context.get(chat.context)
         try:
-            return context.random_text(order, length), True
+            return (
+                context.random_text(chat.order, chat.reply_max_length),
+                True
+            )
         except KeyError as ex:
             self.logger.error(ex)
             return None
+
+    def random_sticker(self):
+        res = Sticker.select_random(1)
+        if not res:
+            return None
+        return res[0]
 
     def filter_image(self, update, download, settings, quote=False):
         output = os.path.join(
@@ -376,110 +435,14 @@ class BotState:
             lambda err: reply_text(update, err, quote)
         ).wait()
 
-    def list_sticker_sets(self, update):
-        page_size = 25
-        if update.callback_query:
-            page = int(update.callback_query.data)
-        else:
-            page = 1
-        sets, pages = self.db.get_sticker_sets(page, page_size)
-        if pages <= 1:
-            return 'no sticker sets', 1
-        res = '\n'.join(
-            '{0}. [{1}](https://t.me/addstickers/{2})'.format(*set_)
-            for set_ in sets
-        )
-        res = 'sticker sets page %d / %d:\n%s' % (page, pages, res)
-        return res, page, pages, False, ParseMode.MARKDOWN
-
-    def list_users(self, update):
-        page_size = 10
-        if update.callback_query:
-            page = int(update.callback_query.data)
-        else:
-            page = 1
-        if update.effective_chat.type != update.effective_message.chat.PRIVATE:
-            permission = 0
-        else:
-            permission = self.db.get_user_data(update.effective_user, 'permission')
-        users, pages = self.db.get_users(page, page_size, permission)
-        if not users:
-            return 'no users', 1, 1, True
-        offset = page_size * (page - 1)
-        res = '\n'.join(
-            '{0}. ({5}) <a href="tg://user?id={1}">{1}</a> {2} {3} {4}'
-            .format(
-                i,
-                user[0],
-                html.escape(user[1] if user[1] is not None
-                            else '<no phone>'),
-                html.escape(user[2] or '<no name>'),
-                html.escape(user[3] or '<no username>'),
-                user[4]
-            )
-            for i, user in enumerate(users, offset + 1)
-        )
-        res = 'users page %d / %d:\n\n%s' % (page, pages, res)
-        return res, page, pages, False, ParseMode.HTML
-
-    def list_search_requests(self, update):
-        page_size = 10
-        if update.callback_query:
-            page = int(update.callback_query.data)
-        else:
-            page = 1
-        offset = page_size * (page - 1)
-        requests, pages = self.db.get_search_log(page, page_size)
-        res = '\n'.join(
-            '{0}. {1} (<b>{2}</b>)'
-            .format(
-                i,
-                html.escape(query),
-                html.escape(user)
-            )
-            for i, (query, user) in enumerate(requests, offset + 1)
-        )
-        res = 'pic log page %d / %d:\n\n%s' % (page, pages, res)
-        return res, page, pages, False, ParseMode.HTML
-
-    def get_search_stats(self, update):
-        page_size = 10
-        if update.callback_query:
-            page = int(update.callback_query.data)
-        else:
-            page = 1
-        stats, pages = self.db.get_search_stats(page, page_size)
-        offset = page_size * (page - 1)
-        res = '\n'.join(
-            '{0}. {1} (<b>{2}</b>)'
-            .format(i, html.escape(query), count)
-            for i, (query, count) in enumerate(stats, offset + 1)
-        )
-        res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
-        return res, page, pages, False, ParseMode.HTML
-
-    def query_db(self, query):
-        self.db.cursor.execute(query)
-        row_count = self.db.cursor.rowcount
-        self.db.save()
-        rows = self.db.cursor.fetchall()
-        res = '\n'.join(' '.join(repr(col) for col in row) for row in rows)
-        if not res:
-            res = '%s rows affected' % row_count
-        else:
-            res = trunc(res)
-        return res, True
-
+    @db_session
     def on_text(self, update):
         message = update.message
         reply, quote = self._need_reply(message)
 
-        context, order, learn, length = self.db.get_chat_data(
-            message.chat,
-            '`context`,`order`,`learn`,`reply_max_length`'
-        )
+        chat = Chat.from_tg(message.chat)
 
-        context = self.context.get(context)
+        context = self.context.get(chat.context)
         text = message.text
         res = None
 
@@ -491,13 +454,16 @@ class BotState:
         if context is not None:
             if reply:
                 try:
-                    reply = context.reply_text(text, order, length)
+                    reply = context.reply_text(
+                        text, chat.order,
+                        chat.reply_max_length
+                    )
                     self.logger.info('reply: "%s"', reply)
                     if reply:
                         res = (reply, quote)
                 except KeyError as ex:
                     self.logger.error(ex)
-            if learn:
+            if chat.learn:
                 self.logger.info('learn')
                 context.learn_text(text)
         elif reply:
@@ -506,17 +472,19 @@ class BotState:
 
         return res
 
+    @db_session
     def on_sticker(self, update):
         message = update.message
         reply, quote = self._need_reply(message)
         if reply:
-            res = self.db.random_sticker()
+            res = self.random_sticker()
             self.logger.info(res)
             if res is None:
                 return None
             return res, quote
         return None
 
+    @db_session
     def on_photo(self, deferred, update):
         message = update.message
         reply, quote = self._need_reply(message)
@@ -529,6 +497,7 @@ class BotState:
         )
         return None
 
+    @db_session
     def on_voice(self, update):
         message = update.message
         reply, quote = self._need_reply(message)
@@ -536,6 +505,7 @@ class BotState:
             return None
         return 'on_voice', quote
 
+    @db_session
     def on_status_update(self, type_, update):
         self.logger.info('status update: %s', type_)
         if type_ is None:

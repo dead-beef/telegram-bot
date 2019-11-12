@@ -33,7 +33,8 @@ setup(name='telegram-bot',
           'markovchain>=0.2.5',
           'dice',
           'urllib3[socks]',
-          'matplotlib'
+          'matplotlib',
+          'pony'
       ],
       extras_require={
           'dev': [

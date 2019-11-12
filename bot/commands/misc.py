@@ -109,7 +109,7 @@ class MiscCommandMixin:
 
     @command(C.REPLY_STICKER)
     def cmd_sticker(self, *_):
-        return self.state.db.random_sticker(), True
+        return self.state.random_sticker(), True
 
     @command(C.REPLY_TEXT)
     def cmd_help(self, *_):

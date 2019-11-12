@@ -6,6 +6,7 @@ from time import sleep
 from functools import wraps
 
 import dice
+from pony.orm import db_session
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -15,8 +16,8 @@ from telegram import (
 
 from bot.error import BotError, CommandError
 from bot.promise import Promise, PromiseType as PT
+from bot.models import User, sqlite3
 
-from .deps import sqlite3
 from .enums import Permission, CommandType
 from .string import match_command_user, strip_command
 from .misc import chunks
@@ -133,7 +134,10 @@ def reply_text(update, msg, quote=False, parse_mode=None):
         else:
             msg = repr(msg)
 
-    update.message.reply_text(msg, quote=quote, parse_mode=parse_mode)
+    if update.message:
+        update.message.reply_text(msg, quote=quote, parse_mode=parse_mode)
+    else:
+        LOGGER.error(msg)
 
 def reply_text_paginated(update, msg, quote=False, parse_mode=None, disable_notification=False):
     page = 1
@@ -212,7 +216,7 @@ def reply_sticker_set(update, stickers, quote=False):
         except TelegramError:
             pass
         sleep(0.5)
-        update.message.reply_sticker(sticker=sticker[0], quote=quote)
+        update.message.reply_sticker(sticker=sticker.file_id, quote=quote)
 
 def reply_photo(update, img, quote=False):
     if isinstance(img, str):
@@ -287,15 +291,18 @@ def update_handler(method):
     return ret
 
 
+def get_permission(user):
+    with db_session:
+        return User.from_tg(user).permission
+
 def check_permission(bot, user, min_value=Permission.USER):
-    get_permission = lambda: bot.state.db.get_user_data(user, 'permission')
     try:
-        value = get_permission()
+        value = get_permission(user)
     except sqlite3.ProgrammingError:
-        get_permission = Promise.wrap(get_permission, ptype=PT.MANUAL)
-        bot.queue.put(get_permission)
-        get_permission.wait()
-        value = get_permission.value
+        get_permission_ = Promise.wrap(get_permission, ptype=PT.MANUAL)
+        bot.queue.put(get_permission_)
+        get_permission_.wait()
+        value = get_permission_.value
     if not isinstance(value, int):
         bot.logger.error('check_permission: %r', value)
         return False, True
@@ -342,9 +349,11 @@ def command(type_, permission=Permission.USER, permission_private=None):
             try:
                 res = method(self, bot, update)
             except (BotError, dice.DiceBaseException) as ex:
+                self.logger.warning(ex)
                 update.message.reply_text(str(ex), quote=True)
                 return
             except Exception as ex:
+                self.logger.error(ex)
                 update.message.reply_text(repr(ex), quote=True)
                 raise
 

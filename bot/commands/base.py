@@ -6,6 +6,7 @@ import subprocess
 from uuid import uuid4
 from functools import partial
 
+from pony.orm import db_session
 from telegram import (
     ChatAction,
     TelegramError,
@@ -19,7 +20,7 @@ from telegram.ext import (
     Filters
 )
 
-from bot.promise import Promise, PromiseType as PT
+from bot.models import User
 from bot.util import (
     trunc,
     command,
@@ -50,51 +51,6 @@ class BotCommandBase:
             dispatcher.add_handler(CallbackQueryHandler(
                 self.callback_query
             ))
-
-    def _get_user_id(self, msg, phone):
-        user_id = None
-        contact = msg.reply_contact(
-            phone_number=phone,
-            quote=False,
-            first_name='user'
-        )
-
-        try:
-            self.logger.info('contact %s', contact)
-            user_id = contact.contact.user_id
-        finally:
-            contact.delete()
-
-        if user_id is not None:
-            learn = Promise.wrap(
-                self.state.db.learn_user_phone,
-                user_id, phone,
-                ptype=PT.MANUAL
-            )
-            self.queue.put(learn)
-            learn.catch(
-                lambda ex: self.logger.error('learn_phone: %r', ex)
-            ).wait()
-        else:
-            get = Promise.wrap(
-                self.state.db.get_user_by_phone,
-                phone,
-                ptype=PT.MANUAL
-            )
-            self.queue.put(get)
-            get.catch(
-                lambda ex: self.logger.error('get: %r', ex)
-            ).wait()
-            user_id = get.value
-            self.logger.info('get: %s', get.value)
-
-        return user_id
-
-    def _get_user_link(self, msg, phone):
-        user_id = self._get_user_id(msg, phone)
-        if user_id is None:
-            return None
-        return '[id{0} {1}](tg://user?id={0})'.format(user_id, phone)
 
     def _run_script(self, update, name, args,
                     download=None, no_output='<no output>',
@@ -169,18 +125,14 @@ class BotCommandBase:
             except Exception as ex:
                 self.logger.error(ex)
 
-    @update_handler
+    @db_session
     def _callback_query(self, bot, update):
         msg = update.callback_query.message
         cmd = None
         has_cmd = False
 
-        permission = self.state.db.get_user_data(
-            update.callback_query.from_user,
-            'permission'
-        )
-
-        if permission <= P.BANNED:
+        user = User.from_tg(update.callback_query.from_user)
+        if user.permission <= P.BANNED:
             return
 
         if msg.text:

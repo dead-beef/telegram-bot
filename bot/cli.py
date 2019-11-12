@@ -4,7 +4,6 @@ import logging
 from argparse import ArgumentParser
 
 from .bot import Bot
-from .util import configure_logger
 
 
 def create_arg_parser():
@@ -25,14 +24,6 @@ def create_arg_parser():
         help='bot data directory (default: %(default)s)'
     )
     parser.add_argument(
-        '-m', '--message-log',
-        metavar='FILE',
-        default=None,
-        help=('message log file ("-" - stdout,'
-              ' "none" - disable message logging)'
-              ' (default: <bot directory>/messages.log)')
-    )
-    parser.add_argument(
         '-l', '--log-level',
         default='info',
         choices=('critical', 'error', 'warning', 'info', 'debug'),
@@ -50,9 +41,6 @@ def main(args=None):
     parser = create_arg_parser()
     args = parser.parse_args(args)
 
-    if args.message_log == '-':
-        args.message_log = sys.stdout
-
     if os.path.isfile(args.token):
         with open(args.token, 'r') as fp:
             args.token = [token.strip() for token in fp.readlines()]
@@ -64,7 +52,6 @@ def main(args=None):
         args.proxy = None
 
     args.log_level = getattr(logging, args.log_level.upper())
-    args.log_messages = args.message_log != 'none'
 
     logging.basicConfig(
         level=args.log_level,
@@ -74,20 +61,8 @@ def main(args=None):
     bot = Bot(
         args.token,
         proxy=args.proxy,
-        root=args.data_dir,
-        log_messages=args.log_messages
+        root=args.data_dir
     )
-
-    if args.message_log is None:
-        args.message_log = os.path.join(bot.state.root, 'messages.log')
-
-    if args.log_messages:
-        configure_logger(
-            'bot.message',
-            log_file=args.message_log,
-            log_format=Bot.MSG_LOG_FORMAT,
-            log_level=logging.INFO
-        )
 
     try:
         bot.start_polling(args.poll)
