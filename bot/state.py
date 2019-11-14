@@ -404,7 +404,7 @@ class BotState:
         res = Sticker.select_random(1)
         if not res:
             return None
-        return res[0]
+        return res[0].file_id
 
     def filter_image(self, update, download, settings, quote=False):
         output = os.path.join(
