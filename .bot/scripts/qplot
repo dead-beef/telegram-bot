@@ -27,7 +27,7 @@ def check_row_format(row):
             return
         elif len(row) == 3:
             _ = str(row[0])
-            _ = float(row[1])
+            _ = isinstance(row[1], str) or float(row[1])
             _ = float(row[2])
             return
     except Exception as ex:
@@ -66,13 +66,29 @@ def plot(col_names, data, fname=None):
             plot_data = {}
             plots = []
             keys = []
+            xs = []
+            xi = {}
 
             for key, x, y in data:
                 try:
+                    if isinstance(x, str):
+                        try:
+                            x = xi[x]
+                        except KeyError:
+                            xi[x] = len(xs)
+                            xs.append(x)
+                            x = xi[x]
                     plot_data[key][0].append(x)
                     plot_data[key][1].append(y)
                 except KeyError:
                     plot_data[key] = ([x], [y])
+
+            if xs:
+                pylab.xticks(range(len(xs)), xs, rotation=90)
+                pylab.subplots_adjust(
+                    bottom=0.02 * max(len(key) for key in xs), top=0.9,
+                    left=0.15, right=0.9
+                )
 
             for key, args in plot_data.items():
                 plt, = pylab.plot(*args, label=key)
