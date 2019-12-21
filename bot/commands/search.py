@@ -19,7 +19,8 @@ from bot.util import (
     get_command_args,
     send_image,
     command,
-    CommandType as C
+    CommandType as C,
+    Permission as P
 )
 
 
@@ -145,20 +146,20 @@ class SearchCommandMixin:
                 except TelegramError as ex:
                     self.logger.info('image post failed: %r: %r', res, ex)
 
-    @command(C.NONE)
+    @command(C.NONE, P.USER_2)
     def cmd_pic(self, _, update):
         query = get_command_args(update.message, help='usage: /pic <query>')
         query = remove_control_chars(query).replace('\n', ' ')
         self.state.run_async(self._search, update, query)
 
-    @command(C.NONE)
+    @command(C.NONE, P.USER_2)
     def cmd_vid(self, _, update):
         query = get_command_args(update.message, help='usage: /vid <query>')
         query = remove_control_chars(query).replace('\n', ' ')
         query += ' site:youtube.com'
         self.state.run_async(self._search, update, query)
 
-    @command(C.NONE)
+    @command(C.NONE, P.USER_2)
     def cb_pic(self, _, update):
         if not update.callback_query.message:
             self.logger.info('cb_pic no message')
@@ -169,7 +170,7 @@ class SearchCommandMixin:
         query = remove_control_chars(query)
         self.state.run_async(self._search, update, query)
 
-    @command(C.NONE)
+    @command(C.NONE, P.USER_2)
     def cb_picreset(self, _, update):
         if not update.callback_query.message:
             self.logger.info('cb_picreset no message')
@@ -180,7 +181,7 @@ class SearchCommandMixin:
         query = remove_control_chars(query)
         self.state.run_async(self._search, update, query, True)
 
-    @command(C.REPLY_TEXT_PAGINATED)
+    @command(C.REPLY_TEXT_PAGINATED, P.USER_2)
     def cmd_piclog(self, _, update):
         page_size = 10
         if update.callback_query:
@@ -203,7 +204,7 @@ class SearchCommandMixin:
 
     cb_pic_log = cmd_piclog
 
-    @command(C.REPLY_TEXT_PAGINATED)
+    @command(C.REPLY_TEXT_PAGINATED, P.USER_2)
     def cmd_picstats(self, _, update):
         page_size = 10
         if update.callback_query:
