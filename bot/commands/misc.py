@@ -119,7 +119,7 @@ class MiscCommandMixin:
                 msg = msg.reply_to_message
                 ftype, _ = get_file(msg)
             except (AttributeError, ValueError):
-                update.message.reply_text('no input file')
+                update.message.reply_text('no input file', quote=True)
                 return
 
         if ftype == 'sticker':
@@ -132,7 +132,10 @@ class MiscCommandMixin:
         #    convert = 'unmake_voice'
         #    ext = ''
         else:
-            update.message.reply_text('file type "%s" is not supported' % ftype)
+            update.message.reply_text(
+                'file type "%s" is not supported' % ftype,
+                quote=True
+            )
             return
 
         deferred = Promise.defer()

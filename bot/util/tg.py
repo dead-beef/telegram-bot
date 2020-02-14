@@ -32,7 +32,7 @@ RE_ANIMATION_URL = re.compile(r'^[^?&]*\.gif([?&].*)?$', re.I)
 
 FILE_TYPES = [
     'video', 'video_note', 'audio', 'voice',
-    'document',  'photo', 'sticker'
+    'document', 'photo', 'sticker'
 ]
 
 
