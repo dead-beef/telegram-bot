@@ -93,7 +93,7 @@ def get_file(message):
 
 def download_file(message, dirs, deferred=None, overwrite=False):
     try:
-        ftype, fid = None, None
+        ftype, fid, fname = None, None
         ftype, fid = get_file(message)
         fdir = dirs[ftype]
         fname = os.path.join(fdir, get_message_filename(message))
