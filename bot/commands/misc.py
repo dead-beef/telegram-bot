@@ -113,14 +113,37 @@ class MiscCommandMixin:
     def cmd_getfile(self, _, update):
         msg = update.message
         try:
-            ftype, fid = get_file(msg)
+            ftype, _ = get_file(msg)
         except ValueError:
             try:
-                ftype, fid = get_file(msg.reply_to_message)
+                msg = msg.reply_to_message
+                ftype, _ = get_file(msg)
             except (AttributeError, ValueError):
                 update.message.reply_text('no input file')
                 return
-        update.message.reply_document(fid)
+
+        if ftype == 'sticker':
+            convert = 'unmake_sticker'
+            ext = 'png'
+        #elif ftype == 'video_note':
+        #    convert = 'unmake_video'
+        #    ext = ''
+        #elif ftype == 'voice':
+        #    convert = 'unmake_voice'
+        #    ext = ''
+        else:
+            update.message.reply_text('file type "%s" is not supported' % ftype)
+            return
+
+        deferred = Promise.defer()
+        self.state.bot.download_file(msg, self.state.file_dir, deferred)
+        self.state.run_async(
+            self._run_script, update,
+            convert, ['{{TMP}}'],
+            deferred.promise,
+            return_file=ext,
+            timeout=self.state.query_timeout
+        )
 
     @command(C.REPLY_STICKER)
     def cmd_sticker(self, *_):
