@@ -118,8 +118,8 @@ class MiscCommandMixin:
             try:
                 ftype, fid = get_file(msg.reply_to_message)
             except (AttributeError, ValueError):
-            update.message.reply_text('no input file')
-            return
+                update.message.reply_text('no input file')
+                return
         update.message.reply_document(fid)
 
     @command(C.REPLY_STICKER)
