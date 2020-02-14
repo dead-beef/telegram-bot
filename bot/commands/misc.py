@@ -68,7 +68,7 @@ class MiscCommandMixin:
         msg = update.message
         args = strip_command(msg.text)
 
-        if args and not re.match(r'^[a-z]{3}(\+[a-z]{3})*$', args):
+        if args and not re.match(r'^[a-z]{3}([+_][a-z]{3})*$', args):
             update.message.reply_text('invalid language %r' % args)
             return
 
