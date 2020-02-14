@@ -12,6 +12,7 @@ from telegram import (
 from bot.safe_eval import safe_eval
 from bot.promise import Promise
 from bot.util import (
+    get_file,
     get_command_args,
     strip_command,
     command,
@@ -33,8 +34,9 @@ class MiscCommandMixin:
             '/b64 <text> - encode base64\n'
             '/b64d <base64> - decode base64\n'
             '/echo <text> - print text\n'
-            '/format <text> - format text\n'
             '/eval <expression> - evaluate expression\n'
+            '/format <text> - format text\n'
+            '/getfile - get file from message\n'
             '/roll <dice> [message] - roll dice\n'
             '/start - generate text\n'
             '/image - generate image\n'
@@ -106,6 +108,19 @@ class MiscCommandMixin:
             return_file='png',
             timeout=self.state.query_timeout
         )
+
+    @command(C.NONE)
+    def cmd_getfile(self, _, update):
+        msg = update.message
+        try:
+            ftype, fid = get_file(msg)
+        except ValueError:
+            try:
+                ftype, fid = get_file(msg.reply_to_message)
+            except (AttributeError, ValueError):
+            update.message.reply_text('no input file')
+            return
+        update.message.reply_document(fid)
 
     @command(C.REPLY_STICKER)
     def cmd_sticker(self, *_):
