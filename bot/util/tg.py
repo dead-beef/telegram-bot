@@ -30,7 +30,10 @@ RE_COMMAND_USERNAME = re.compile(r'^/[^@\s]+@([^\s]+)\s*')
 
 RE_ANIMATION_URL = re.compile(r'^[^?&]*\.gif([?&].*)?$', re.I)
 
-FILE_TYPES = ['video', 'audio', 'document', 'voice', 'photo', 'sticker']
+FILE_TYPES = [
+    'video', 'video_note', 'audio', 'voice',
+    'document',  'photo', 'sticker'
+]
 
 
 def check_callback_user(update):
