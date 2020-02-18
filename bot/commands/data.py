@@ -33,7 +33,7 @@ class DataCommandMixin:
             '/stickerset <id> - send sticker set\n'
             '/q <query> - sql query\n'
             '/qr <query> - sql query (read only)\n'
-            '/qplot <query> - sql query plot (read only)\n'
+            '/qp [plot type] <query> - sql query plot (read only)\n'
         )
 
     def _get_user_id(self, msg, phone):
@@ -92,11 +92,21 @@ class DataCommandMixin:
         )
 
     @command(C.NONE, P.USER_2)
-    def cmd_qplot(self, _, update):
-        query = get_command_args(update.message, help='usage: /qplot <query>')
+    def cmd_qp(self, _, update):
+        args = get_command_args(
+            update.message,
+            help='usage: /qp [plot type] <query>'
+        )
+        args_ = args.split(maxsplit=1)
+        if len(args_) == 1 or args_[0].lower() in ('select', 'with'):
+            ptype = 'auto'
+            query = args
+        else:
+            ptype = args_[0].lower()
+            query = args_[1]
         self.state.run_async(
             self._run_script, update,
-            'qplot', ['-o', '{{TMP}}', query],
+            'qplot', ['-t', ptype, '-o', '{{TMP}}', query],
             return_image=True,
             timeout=self.state.query_timeout
         )

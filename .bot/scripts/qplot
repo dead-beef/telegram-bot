@@ -22,25 +22,29 @@ def check_row_format(row):
             key = row[0]
             _ = float(row[1])
             if isinstance(key, str):
-                return
+                return 'bar'
             key = float(key)
-            return
+            return 'plot'
         elif len(row) == 3:
             _ = str(row[0])
             _ = isinstance(row[1], str) or float(row[1])
             _ = float(row[2])
-            return
+            return 'plot'
     except Exception as ex:
         raise ValueError(DATA_FMT_ERROR, ex)
     raise ValueError(DATA_FMT_ERROR)
 
 
-def plot(col_names, data, fname=None):
+def plot(col_names, data, plot_type=None, fname=None):
     if pylab is None:
         raise RuntimeError('matplotlib is not installed')
     if not data:
         raise ValueError('no data')
-    check_row_format(data[0])
+
+    plot_type_auto = check_row_format(data[0])
+    if plot_type is None or plot_type == 'auto':
+        plot_type = plot_type_auto
+    plot_ = getattr(pylab, plot_type)
 
     try:
         xtitle = col_names[-2]
@@ -59,9 +63,9 @@ def plot(col_names, data, fname=None):
                     bottom=0.02 * max(len(key) for key in xs), top=0.9,
                     left=0.15, right=0.9
                 )
-                pylab.bar(range(len(xs)), ys)
+                plot_(range(len(xs)), ys)
             else:
-                pylab.plot(xs, ys)
+                plot_(xs, ys)
         elif len(data[0]) == 3:
             plot_data = {}
             plots = []
@@ -91,7 +95,7 @@ def plot(col_names, data, fname=None):
                 )
 
             for key, args in plot_data.items():
-                plt, = pylab.plot(*args, label=key)
+                plt = plot_(*args, label=key)
                 plots.append(plt)
                 keys.append(key)
 
@@ -115,6 +119,10 @@ def main():
         import sqlite3
 
     parser = ArgumentParser()
+    parser.add_argument('-t', '--type',
+                        choices=('auto', 'plot', 'bar', 'scatter'),
+                        default='auto',
+                        help='plot type')
     parser.add_argument('-d', '--database',
                         default=os.path.expanduser('~/.bot/bot.db'),
                         help='database to query')
@@ -128,10 +136,11 @@ def main():
     cursor = db.cursor()
     cursor.execute(args.query)
     plot(
-		[desc[0] for desc in cursor.description],
-		cursor.fetchall(),
-		args.output
-	)
+        [desc[0] for desc in cursor.description],
+        cursor.fetchall(),
+        args.type,
+        args.output
+    )
 
 
 if __name__ == '__main__':
