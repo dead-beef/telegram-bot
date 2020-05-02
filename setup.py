@@ -34,7 +34,9 @@ setup(name='telegram-bot',
           'dice',
           'urllib3[socks]',
           'matplotlib',
-          'pony'
+          'mplcyberpunk',
+          'pony',
+          'tqdm'
       ],
       extras_require={
           'dev': [
