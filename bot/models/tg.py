@@ -110,7 +110,7 @@ class Chat(db.Entity):
 class Message(db.Entity):
     id_in_chat = Required(int, size=64)
     chat = Optional(Chat, nullable=True)
-    user = Required(User)
+    user = Optional(User, nullable=True)
     timestamp = Required(int, size=64)
     text = Optional(str, nullable=True)
     file_id = Optional(str, nullable=True)
@@ -118,6 +118,9 @@ class Message(db.Entity):
     file_name = Optional(str, nullable=True)
     sticker_id = Optional(str, nullable=True)
     inline_query = Optional(str, nullable=True)
+
+    def __repr__(self):
+        return 'Message(id_in_chat=%r)' % self.id_in_chat
 
 
 class UserPhone(db.Entity):
