@@ -7,6 +7,12 @@ try:
 except ImportError:
     pylab = None
 
+try:
+    import mplcyberpunk
+    mpl.style.use('cyberpunk')
+except ImportError:
+    mplcyberpunk = None
+
 import sqlite_functions as sqf
 
 
@@ -100,6 +106,9 @@ def plot(col_names, data, plot_type=None, fname=None):
                 keys.append(key)
 
             pylab.legend(plots, keys)
+
+        if mplcyberpunk is not None:
+            mplcyberpunk.add_glow_effects()
 
         if fname is None:
             pylab.show()
