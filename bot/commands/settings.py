@@ -30,6 +30,7 @@ class SettingsCommandMixin:
             '/settings - print chat settings\n'
             '/settrigger <regexp> - set trigger\n'
             '/setreplylength <words> - set max reply length\n'
+            '/unsetcontext - unset generator context\n'
             '/unsettrigger - remove trigger\n'
             '/delprivate - delete private context\n'
         )
@@ -94,6 +95,27 @@ class SettingsCommandMixin:
             chat.reply_max_length
         )
         return reply
+
+    @command(C.REPLY_TEXT, P.ADMIN, P.USER)
+    def cmd_unsetcontext(self, _, update):
+        chat = update.message.chat
+
+        self.logger.info('unset_context %s', chat.id)
+        chat = Chat.from_tg(chat)
+
+        prev_context = chat.context
+        prev_order = chat.order
+        prev_learn = chat.learn
+
+        chat.context = None
+        chat.order = 0
+        chat.learn = False
+
+        return 'context: %s -> %s\norder: %s -> %s\nlearn: %s -> %s' % (
+            prev_context, chat.context,
+            prev_order, chat.order,
+            bool(prev_learn), bool(chat.learn)
+        )
 
     @command(C.GET_OPTIONS, P.ADMIN, P.USER)
     def cmd_setcontext(self, _, update):

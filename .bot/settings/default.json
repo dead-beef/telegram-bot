@@ -5,6 +5,17 @@
 	"aliases": {
 		"^/test\\b": "/echo test"
 	},
+	"auto_create_private_context": false,
+	"search_enabled": true,
+	"download": {
+		"video": false,
+		"video_note": true,
+		"audio": false,
+		"voice": true,
+		"document": false,
+		"photo": false,
+		"sticker": false
+	},
 	"on_add_self": [
 		"add_self"
 	],

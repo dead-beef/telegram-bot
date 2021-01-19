@@ -236,9 +236,7 @@ class Bot:
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)
     def on_photo(self, _, update):
-        deferred = Promise.defer()
-        self.download_file(update.message, self.state.file_dir, deferred)
-        return partial(self.state.on_photo, deferred)
+        return self.state.on_photo
 
     @update_handler
     def on_contact(self, _, update):
@@ -261,9 +259,8 @@ class Bot:
     @update_handler
     @command(C.REPLY_TEXT, P.IGNORED)
     def on_voice(self, _, update):
-        self.download_file(update.message, self.state.file_dir)
         return self.state.on_voice
 
     @update_handler
     def on_file(self, _, update):
-        self.download_file(update.message, self.state.file_dir)
+        return self.state.on_file

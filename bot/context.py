@@ -13,10 +13,11 @@ class Context:
         'filter'
     ]
 
-    def __init__(self, root, defaults):
+    def __init__(self, root, defaults, is_private=False):
         self.root = root
         self.name = os.path.basename(self.root)
         self.is_writable = not root.endswith('_ro')
+        self.is_private = is_private
         self.markov = MarkovText.from_file(
             os.path.join(self.root, 'markov.db'),
             storage=SqliteStorage

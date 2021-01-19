@@ -38,12 +38,36 @@ class SearchCommandMixin:
         )
 
     def _search(self, update, query, reset=False):
+        chat = update.effective_chat
+        chat_id = chat.id
+        settings = self.state.get_chat_settings(chat)
+
         if update.callback_query:
             user = update.callback_query.from_user
             reply_to = None
         else:
             user = update.message.from_user
             reply_to = update.message.message_id
+
+        primary_bot = self.state.bot.primary.bot
+        if chat.type == chat.PRIVATE:
+            bot = primary_bot
+        else:
+            bot = self.state.bot.updaters[-1].bot
+
+        try:
+            enabled = settings['search_enabled']
+        except KeyError:
+            enabled = False
+        if not enabled:
+            if reply_to is not None:
+                primary_bot.send_message(
+                    chat_id,
+                    '"search_enabled": false',
+                    quote=True,
+                    reply_to_message_id=reply_to
+                )
+            return
 
         learn = Promise.wrap(
             self.state.learn_search_query,
@@ -57,15 +81,6 @@ class SearchCommandMixin:
         if isinstance(offset, Exception):
             self.logger.error(offset)
             return
-
-        chat = update.effective_chat
-        chat_id = chat.id
-
-        primary_bot = self.state.bot.primary.bot
-        if chat.type == chat.PRIVATE:
-            bot = primary_bot
-        else:
-            bot = self.state.bot.updaters[-1].bot
 
         try:
             bot.send_chat_action(chat_id, ChatAction.UPLOAD_PHOTO)

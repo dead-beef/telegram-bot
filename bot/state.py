@@ -31,6 +31,7 @@ from .context_cache import ContextCache
 from .formatter import Formatter
 from .error import CommandError
 from .search import Search
+from .promise import Promise
 
 
 class BotState:
@@ -335,18 +336,28 @@ class BotState:
 
         update.message.text = msg
 
-    def get_chat_context(self, chat):
+    @db_session
+    def get_chat_context(self, chat, throw=True):
         if not isinstance(chat, Chat):
             chat = Chat.from_tg(chat)
         if chat.context is None:
-            raise CommandError('generator context is not set')
-        return self.context.get(chat.context)
+            if throw:
+                raise CommandError('generator context is not set')
+            return None
+        try:
+            return self.context.get(chat.context)
+        except Exception as ex:
+            self.logger.error('error loading context %r: %r', chat.context, ex)
+            chat.context = None
+            chat.order = 0
+            chat.learn = False
+            if throw:
+                raise CommandError('invalid context')
+            return None
 
     def get_chat_settings(self, chat):
-        try:
-            return self.get_chat_context(chat).settings
-        except CommandError:
-            return self.context.defaults
+        ctx = self.get_chat_context(chat, False)
+        return ctx.settings if ctx is not None else self.context.defaults
 
     def _need_reply(self, message):
         reply = False
@@ -367,11 +378,7 @@ class BotState:
             quote = True
             reply = True
         elif text:
-            if text.strip().startswith('/image'):
-                self.logger.info('image command: reply=True')
-                quote = True
-                reply = True
-            elif self.username in text:
+            if self.username in text:
                 self.logger.info('username in message text: reply=True')
                 quote = True
                 reply = True
@@ -387,10 +394,7 @@ class BotState:
 
     def random_text(self, update):
         chat = Chat.from_tg(update.message.chat)
-        if chat.context is None:
-            self.logger.info('no context')
-            raise CommandError('generator context is not set')
-        context = self.context.get(chat.context)
+        context = self.get_chat_context(chat)
         try:
             return (
                 context.random_text(chat.order, chat.reply_max_length),
@@ -435,6 +439,11 @@ class BotState:
             lambda err: reply_text(update, err, quote)
         ).wait()
 
+        try:
+            os.remove(output)
+        except OSError:
+            pass
+
     @db_session
     def on_text(self, update):
         message = update.message
@@ -442,14 +451,20 @@ class BotState:
 
         chat = Chat.from_tg(message.chat)
 
-        context = self.context.get(chat.context)
+        context = self.get_chat_context(chat, False)
+        settings = self.get_chat_settings(chat)
         text = message.text
         res = None
 
-        private = self.context.get_private(message.chat)
+        try:
+            create_private = settings['auto_create_private_context']
+        except KeyError:
+            create_private = False
 
-        self.logger.info('learn private')
-        private.learn_text(text)
+        if create_private or self.context.has_private(message.chat):
+            private = self.context.get_private(message.chat)
+            self.logger.info('learn private')
+            private.learn_text(text)
 
         if context is not None:
             if reply:
@@ -463,7 +478,7 @@ class BotState:
                         res = (reply, quote)
                 except KeyError as ex:
                     self.logger.error(ex)
-            if chat.learn:
+            if chat.learn and not context.is_private:
                 self.logger.info('learn')
                 context.learn_text(text)
         elif reply:
@@ -475,6 +490,7 @@ class BotState:
     @db_session
     def on_sticker(self, update):
         message = update.message
+        self.maybe_download(message)
         reply, quote = self._need_reply(message)
         if reply:
             res = self.random_sticker()
@@ -485,12 +501,16 @@ class BotState:
         return None
 
     @db_session
-    def on_photo(self, deferred, update):
+    def on_photo(self, update):
         message = update.message
+        deferred = self.maybe_download(message)
         reply, quote = self._need_reply(message)
         settings = self.get_chat_settings(update.message.chat)
         if not reply:
             return None
+        if deferred is None:
+            deferred = Promise.defer()
+            self.bot.download_file(update.message, self.file_dir, deferred)
         self.run_async(
             self.filter_image,
             update, deferred.promise, settings, quote
@@ -500,6 +520,7 @@ class BotState:
     @db_session
     def on_voice(self, update):
         message = update.message
+        self.maybe_download(message)
         reply, quote = self._need_reply(message)
         if not reply:
             return None
@@ -516,3 +537,27 @@ class BotState:
         except KeyError as ex:
             self.logger.warning('status_update: %s: %r', type_, ex)
             return None
+
+    @db_session
+    def on_file(self, update):
+        message = update.message
+        self.maybe_download(message)
+        reply, quote = self._need_reply(message)
+        if not reply:
+            return None
+        return 'on_file', quote
+
+    @db_session
+    def maybe_download(self, message):
+        settings = self.get_chat_settings(message.chat)
+        try:
+            ftype, _ = get_file(message)
+            download = settings['download'][ftype]
+        except (KeyError, TypeError):
+            download = False
+        self.logger.info('maybe_download %r %r', ftype, download)
+        if not download:
+            return None
+        deferred = Promise.defer()
+        self.bot.download_file(message, self.file_dir, deferred)
+        return deferred

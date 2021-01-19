@@ -28,10 +28,10 @@ class ContextCache:
     def get_path(self, name):
         ret = os.path.join(self.root, name)
         if os.path.isdir(ret):
-            return ret
+            return ret, False
         ret = os.path.join(self.root_private, name)
         if os.path.isdir(ret):
-            return ret
+            return ret, True
         raise FileNotFoundError('context not found: "%s"' % name)
 
     def create_private(self, name):
@@ -62,7 +62,8 @@ class ContextCache:
         try:
             return self.context[name]
         except KeyError:
-            ctx = Context(self.get_path(name), self.defaults)
+            path, private = self.get_path(name)
+            ctx = Context(path, self.defaults, private)
             self.context[name] = ctx
             return ctx
 
