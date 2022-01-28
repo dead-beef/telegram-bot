@@ -23,25 +23,13 @@
 			"html": "pre"
 		},
 		"sp": {
-			"replace": "█"
+			"html": "tg-spoiler"
 		},
 		"u": {
-			"intersperse_after": "\u0332"
-		},
-		"us": {
-			"intersperse_after": "\u0331"
+			"html": "u"
 		},
 		"s": {
-			"intersperse_after": "\u0336"
-		},
-		"ss": {
-			"intersperse_after": "\u0335"
-		},
-		"d": {
-			"intersperse_after": "\u0338"
-		},
-		"ds": {
-			"intersperse_after": "\u0337"
+			"html": "s"
 		},
 		"f": {
 			"translate_reverse": {
