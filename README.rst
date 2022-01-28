@@ -52,6 +52,26 @@ Usage
       --log-level {critical,error,warning,info,debug}
                             log level (default: info)
 
+::
+
+    > python -m bot.import_json -h
+    usage: python -m bot.import_json <src_json> <src_chat_id> <dst_db> [dst_chat_id]
+
+::
+
+    > python -m bot.leave_groups -h
+    usage: leave_groups.py [-h] [-p PROXY] [-d DATA_DIR] TOKEN_OR_FILE
+
+    positional arguments:
+      TOKEN_OR_FILE         bot token or token file
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -p PROXY, --proxy PROXY
+                            proxy (default: socks5://127.0.0.1:9050/ (tor))
+      -d DATA_DIR, --data-dir DATA_DIR
+                            bot data directory (default: ~/.bot)
+
 
 Licenses
 --------
