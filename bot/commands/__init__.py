@@ -7,6 +7,7 @@ from .settings import SettingsCommandMixin
 
 
 class BotCommands(SettingsCommandMixin, DataCommandMixin,
-                  GameCommandMixin, SearchCommandMixin, MiscCommandMixin,
+                  #GameCommandMixin,
+                  SearchCommandMixin, MiscCommandMixin,
                   BotCommandBase):
     pass

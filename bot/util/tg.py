@@ -35,6 +35,11 @@ FILE_TYPES = [
     'document', 'photo', 'sticker'
 ]
 
+def get_tokens(token_or_file):
+    if os.path.isfile(token_or_file):
+        with open(token_or_file, 'r') as fp:
+            return [token.strip() for token in fp.readlines()]
+    return [token_or_file]
 
 def check_callback_user(update):
     if not update.callback_query.message:

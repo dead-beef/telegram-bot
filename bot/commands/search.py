@@ -12,7 +12,7 @@ from telegram import (
 from telegram.error import BadRequest, Unauthorized
 
 from bot.error import SearchError
-from bot.models import get_page, SearchQuery, SearchLog
+from bot.models import get_page, SearchQuery #, SearchLog
 from bot.promise import Promise, PromiseType as PT
 from bot.util import (
     remove_control_chars,
@@ -33,8 +33,8 @@ class SearchCommandMixin:
             '\n'
             '/pic <query> - image search\n'
             '/vid <query> - video search\n'
-            '/piclog - show image search log\n'
-            '/picstats - show image search stats\n'
+            #'/piclog - show image search log\n'
+            #'/picstats - show image search stats\n'
         )
 
     def _search(self, update, query, reset=False):
@@ -196,46 +196,46 @@ class SearchCommandMixin:
         query = remove_control_chars(query)
         self.state.run_async(self._search, update, query, True)
 
-    @command(C.REPLY_TEXT_PAGINATED, P.USER_2)
-    def cmd_piclog(self, _, update):
-        page_size = 10
-        if update.callback_query:
-            page = int(update.callback_query.data)
-        else:
-            page = 1
-        offset = page_size * (page - 1)
-        requests, pages = get_page(SearchLog.select(), page, page_size)
-        res = '\n'.join(
-            '{0}. {1} (<b>{2}</b>)'
-            .format(
-                i,
-                html.escape(data.query.query),
-                html.escape(data.user.name)
-            )
-            for i, data in enumerate(requests, offset + 1)
-        )
-        res = 'pic log page %d / %d:\n\n%s' % (page, pages, res)
-        return res, page, pages, False, ParseMode.HTML
+    #@command(C.REPLY_TEXT_PAGINATED, P.USER_2)
+    #def cmd_piclog(self, _, update):
+    #    page_size = 10
+    #    if update.callback_query:
+    #        page = int(update.callback_query.data)
+    #    else:
+    #        page = 1
+    #    offset = page_size * (page - 1)
+    #    requests, pages = get_page(SearchLog.select(), page, page_size)
+    #    res = '\n'.join(
+    #        '{0}. {1} (<b>{2}</b>)'
+    #        .format(
+    #            i,
+    #            html.escape(data.query.query),
+    #            html.escape(data.user.name)
+    #        )
+    #        for i, data in enumerate(requests, offset + 1)
+    #    )
+    #    res = 'pic log page %d / %d:\n\n%s' % (page, pages, res)
+    #    return res, page, pages, False, ParseMode.HTML
 
-    cb_pic_log = cmd_piclog
+    #cb_pic_log = cmd_piclog
 
-    @command(C.REPLY_TEXT_PAGINATED, P.USER_2)
-    def cmd_picstats(self, _, update):
-        page_size = 10
-        if update.callback_query:
-            page = int(update.callback_query.data)
-        else:
-            page = 1
-        query = select((q, count(log)) for q in SearchQuery for log in q.log)
-        query = query.order_by(-2)
-        stats, pages = get_page(query, page, page_size)
-        offset = page_size * (page - 1)
-        res = '\n'.join(
-            '{0}. {1} (<b>{2}</b>)'
-            .format(i, html.escape(query.query), count)
-            for i, (query, count) in enumerate(stats, offset + 1)
-        )
-        res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
-        return res, page, pages, False, ParseMode.HTML
+    #@command(C.REPLY_TEXT_PAGINATED, P.USER_2)
+    #def cmd_picstats(self, _, update):
+    #    page_size = 10
+    #    if update.callback_query:
+    #        page = int(update.callback_query.data)
+    #    else:
+    #        page = 1
+    #    query = select((q, count(log)) for q in SearchQuery for log in q.log)
+    #    query = query.order_by(-2)
+    #    stats, pages = get_page(query, page, page_size)
+    #    offset = page_size * (page - 1)
+    #    res = '\n'.join(
+    #        '{0}. {1} (<b>{2}</b>)'
+    #        .format(i, html.escape(query.query), count)
+    #        for i, (query, count) in enumerate(stats, offset + 1)
+    #    )
+    #    res = 'pic stats page %d / %d:\n\n%s' % (page, pages, res)
+    #    return res, page, pages, False, ParseMode.HTML
 
-    cb_pic_stats = cmd_picstats
+    #cb_pic_stats = cmd_picstats

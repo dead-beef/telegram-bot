@@ -1,3 +1,4 @@
+import os
 from pony.orm import flush
 
 from .db import sqlite3, db, get_page, get_or_create, update_or_create
@@ -18,3 +19,6 @@ def connect(path):
     db.bind('sqlite', path, create_db=True)
     db.generate_mapping(create_tables=True)
     return db
+
+def get_db_path(root):
+    return os.path.join(root, 'bot.db')

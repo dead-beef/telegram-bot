@@ -23,7 +23,7 @@ from .util import (
     FILE_TYPES
 )
 from .models import (
-    connect, flush, get_or_create, update_or_create,
+    connect, flush, get_db_path, get_or_create, update_or_create,
     StickerSet, Sticker, User, UserPhone, Chat, Message,
     SearchQuery, SearchLog
 )
@@ -37,7 +37,7 @@ from .promise import Promise
 class BotState:
     ASYNC_MAX_DEFAULT = 4
     PROCESS_TIMEOUT_DEFAULT = 60
-    QUERY_TIMEOUT_DEFAULT = 5
+    QUERY_TIMEOUT_DEFAULT = 10
     RE_COMMAND = re.compile(r'^/([^@\s]+)')
     RE_COMMAND_NO_ARGS = re.compile(r'^/([^@\s]+)(@\S+)?\s*$')
 
@@ -67,7 +67,7 @@ class BotState:
         self.default_file_dir = os.path.join(self.root, 'document')
         self.file_dir = defaultdict(lambda: self.default_file_dir)
         self.tmp_dir = tempfile.mkdtemp(prefix=__name__ + '.')
-        self.db_path = os.path.join(self.root, 'bot.db')
+        self.db_path = get_db_path(self.root)
         connect(self.db_path)
 
         self.search = Search(proxy=proxy)
@@ -309,7 +309,7 @@ class BotState:
             query_.offset = 0
         else:
             query_.offset += 1
-        SearchLog(user=user, query=query_, timestamp=int(time.time() * 1000))
+        #SearchLog(user=user, query=query_, timestamp=int(time.time() * 1000))
         return query_.offset
 
 

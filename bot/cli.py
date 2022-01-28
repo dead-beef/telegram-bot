@@ -1,9 +1,9 @@
 import os
-import sys
 import logging
 from argparse import ArgumentParser
 
 from .bot import Bot
+from .util import get_tokens
 
 
 def create_arg_parser():
@@ -41,11 +41,7 @@ def main(args=None):
     parser = create_arg_parser()
     args = parser.parse_args(args)
 
-    if os.path.isfile(args.token):
-        with open(args.token, 'r') as fp:
-            args.token = [token.strip() for token in fp.readlines()]
-    else:
-        args.token = [args.token]
+    args.token = get_tokens(args.token)
 
     args.proxy = args.proxy.strip()
     if not args.proxy or args.proxy.lower() == 'none':
