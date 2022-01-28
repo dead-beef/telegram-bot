@@ -501,16 +501,20 @@ class BotState:
         return None
 
     @db_session
-    def on_photo(self, update):
-        message = update.message
+    def on_photo(self, update, message=None, force_reply=False):
+        if message is None:
+            message = update.message
         deferred = self.maybe_download(message)
-        reply, quote = self._need_reply(message)
-        settings = self.get_chat_settings(update.message.chat)
+        if force_reply:
+            reply, quote = True, True
+        else:
+            reply, quote = self._need_reply(message)
+        settings = self.get_chat_settings(message.chat)
         if not reply:
             return None
         if deferred is None:
             deferred = Promise.defer()
-            self.bot.download_file(update.message, self.file_dir, deferred)
+            self.bot.download_file(message, self.file_dir, deferred)
         self.run_async(
             self.filter_image,
             update, deferred.promise, settings, quote

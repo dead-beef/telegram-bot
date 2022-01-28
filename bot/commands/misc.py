@@ -59,9 +59,7 @@ class MiscCommandMixin:
         else:
             update.message.reply_text('no input image')
             return None
-        deferred = Promise.defer()
-        self.state.bot.download_file(msg, self.state.file_dir, deferred)
-        return self.state.on_photo(deferred, update)
+        return self.state.on_photo(update, msg, True)
 
     @command(C.NONE)
     def cmd_ocr(self, _, update):
