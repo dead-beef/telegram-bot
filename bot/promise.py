@@ -100,7 +100,7 @@ class Promise:
             elif on_reject is not None:
                 state = PromiseState.RESOLVED
                 value = on_reject(value)
-            if isinstance(value, Promise):
+            while isinstance(value, Promise):
                 if not value.wait():
                     raise PromiseTimeout()
                 state, value = value._state, value._value

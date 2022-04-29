@@ -95,9 +95,9 @@ class Bot:
 
         dispatcher.add_handler(InlineQueryHandler(self.on_inline))
 
-        for updater in self.updaters:
-            dispatcher = updater.dispatcher
-            dispatcher.add_error_handler(self.on_error)
+        #for updater in self.updaters:
+        #    dispatcher = updater.dispatcher
+        #    dispatcher.add_error_handler(self.on_error)
 
     def save(self):
         self.state.save()
@@ -183,8 +183,12 @@ class Bot:
         self.primary.dispatcher.run_async(download_file, message,
                                           dirs, deferred, overwrite)
 
-    def on_error(self, _, update, error):
-        self.logger.error('update "%s" caused error "%s"', update, error)
+    def on_error(self, *args):
+        self.logger.error(
+            'update "%r" caused error "%r"',
+            args[-2],
+            args[-1]
+        )
 
     @update_handler
     def on_inline(self, bot, update):

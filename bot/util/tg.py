@@ -11,7 +11,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ChatAction,
-    TelegramError
+    TelegramError,
+    Update
 )
 
 from bot.error import BotError, CommandError
@@ -279,6 +280,8 @@ def send_image(bot, chat_id, url, *args, **kwargs):
 def update_handler(method):
     @wraps(method)
     def ret(self, bot, update):
+        if not isinstance(update, Update):
+            update, bot = bot, update.bot
         self.logger.debug(
             'update: %s: chat=%s user=%s message=%s',
             method.__name__,
